@@ -7,6 +7,9 @@ import { ProjectFilters } from "@/components/ProjectFilters";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectDrawer } from "@/components/ProjectDrawer";
 import { ProjectSkeleton } from "@/components/ProjectSkeleton";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, FolderPlus, Filter } from "lucide-react";
+import { toast } from "sonner";
 
 const Index = () => {
   const [loading, setLoading] = useState(true);
@@ -80,14 +83,27 @@ const Index = () => {
     setSearchQuery(query);
   };
 
+  const handleAddProject = () => {
+    toast.info("Create Project", "This would open a form to create a new project");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header onSearch={handleSearch} />
       
       <main className="flex-1 container mx-auto py-6 px-4 max-w-6xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Projects</h1>
-          <p className="text-muted-foreground">Manage your client projects and track scope.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Projects</h1>
+            <p className="text-muted-foreground">Manage your client projects and track scope.</p>
+          </div>
+          <Button 
+            onClick={handleAddProject}
+            className="mt-4 md:mt-0 bg-brand-purple-light hover:bg-brand-purple flex gap-2"
+          >
+            <PlusCircle className="h-4 w-4" />
+            New Project
+          </Button>
         </div>
         
         <ProjectFilters 
@@ -115,22 +131,47 @@ const Index = () => {
               </div>
             ) : (
               <div className="text-center py-12 mt-6 bg-white rounded-lg shadow-sm">
-                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                  <FolderPlus className="h-10 w-10 text-brand-purple-light" />
                 </div>
-                <h3 className="text-xl font-medium mb-2">No projects found</h3>
-                <p className="text-gray-500 mb-4">Try adjusting your filters or search query.</p>
-                <button 
-                  className="px-4 py-2 rounded-md bg-brand-purple-light text-white hover:bg-brand-purple"
-                  onClick={() => {
-                    setStatusFilter("All");
-                    setSearchQuery("");
-                  }}
-                >
-                  Clear Filters
-                </button>
+                {searchQuery || statusFilter !== "All" ? (
+                  <>
+                    <h3 className="text-xl font-medium mb-2">No projects found</h3>
+                    <p className="text-gray-500 mb-6 max-w-md mx-auto">We couldn't find any projects matching your current filters. Try adjusting your search or filters.</p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <Button 
+                        variant="outline"
+                        className="flex gap-2"
+                        onClick={() => {
+                          setStatusFilter("All");
+                          setSearchQuery("");
+                        }}
+                      >
+                        <Filter className="h-4 w-4" />
+                        Clear Filters
+                      </Button>
+                      <Button 
+                        className="bg-brand-purple-light hover:bg-brand-purple flex gap-2"
+                        onClick={handleAddProject}
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        Create New Project
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-medium mb-2">Start your first project</h3>
+                    <p className="text-gray-500 mb-6 max-w-md mx-auto">Projects help you organize your deliverables and track revisions. Get started by creating your first project.</p>
+                    <Button 
+                      className="bg-brand-purple-light hover:bg-brand-purple flex gap-2"
+                      onClick={handleAddProject}
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                      Create Your First Project
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </>

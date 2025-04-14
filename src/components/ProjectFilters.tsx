@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ProjectStatus } from "@/types";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, Calendar, BarChart2 } from "lucide-react";
+import { SlidersHorizontal, Calendar, BarChart2, Clock } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface ProjectFiltersProps {
   onStatusChange: (status: ProjectStatus | "All") => void;
@@ -33,36 +34,23 @@ export function ProjectFilters({ onStatusChange, onSortChange }: ProjectFiltersP
   };
 
   return (
-    <div className="flex items-center gap-2 p-4">
-      <div className="flex gap-2">
-        <Button
-          variant={status === "All" ? "default" : "outline"}
-          onClick={() => handleStatusChange("All")}
-          className={status === "All" ? "bg-brand-purple-light hover:bg-brand-purple" : ""}
-        >
-          All
-        </Button>
-        <Button
-          variant={status === "Active" ? "default" : "outline"}
-          onClick={() => handleStatusChange("Active")}
-          className={status === "Active" ? "bg-brand-purple-light hover:bg-brand-purple" : ""}
-        >
-          Active
-        </Button>
-        <Button
-          variant={status === "On Hold" ? "default" : "outline"}
-          onClick={() => handleStatusChange("On Hold")}
-          className={status === "On Hold" ? "bg-brand-purple-light hover:bg-brand-purple" : ""}
-        >
-          On Hold
-        </Button>
-        <Button
-          variant={status === "Completed" ? "default" : "outline"}
-          onClick={() => handleStatusChange("Completed")}
-          className={status === "Completed" ? "bg-brand-purple-light hover:bg-brand-purple" : ""}
-        >
-          Completed
-        </Button>
+    <div className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+      <div>
+        <h3 className="text-sm font-medium mb-2 text-muted-foreground">Status</h3>
+        <ToggleGroup type="single" value={status} onValueChange={(value) => handleStatusChange(value as ProjectStatus | "All")}>
+          <ToggleGroupItem value="All" aria-label="All Projects" className={status === "All" ? "bg-brand-purple-light text-white" : ""}>
+            All
+          </ToggleGroupItem>
+          <ToggleGroupItem value="Active" aria-label="Active Projects" className={status === "Active" ? "bg-green-100 text-green-800" : ""}>
+            Active
+          </ToggleGroupItem>
+          <ToggleGroupItem value="On Hold" aria-label="On Hold Projects" className={status === "On Hold" ? "bg-yellow-100 text-yellow-800" : ""}>
+            On Hold
+          </ToggleGroupItem>
+          <ToggleGroupItem value="Completed" aria-label="Completed Projects" className={status === "Completed" ? "bg-blue-100 text-blue-800" : ""}>
+            Completed
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       <div className="ml-auto">
@@ -70,10 +58,10 @@ export function ProjectFilters({ onStatusChange, onSortChange }: ProjectFiltersP
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">
               <SlidersHorizontal className="h-4 w-4" />
-              Sort By
+              Sort By: {sort === "date" ? "Date" : "Progress"}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Sort Projects</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuRadioGroup value={sort} onValueChange={(value) => handleSortChange(value as "date" | "progress")}>

@@ -3,7 +3,7 @@ import { Project } from "@/types";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Clock, FileText } from "lucide-react";
+import { Clock, FileText, CheckCircle } from "lucide-react";
 
 interface ProjectCardProps {
   project: Project;
@@ -16,6 +16,11 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
   const completedDeliverables = project.deliverables.filter(
     d => d.status === "Approved"
   ).length;
+  
+  // Calculate progress percentage based on approved deliverables
+  const progressPercentage = totalDeliverables > 0 
+    ? Math.round((completedDeliverables / totalDeliverables) * 100)
+    : 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -53,14 +58,15 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
       <CardContent className="p-4 pt-2 pb-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <FileText className="h-4 w-4" />
+            <CheckCircle className="h-4 w-4" />
             <span>{completedDeliverables} of {totalDeliverables} deliverables</span>
           </div>
+          <span className="text-sm font-medium">{progressPercentage}%</span>
         </div>
         <Progress
-          value={project.progress}
+          value={progressPercentage}
           className="h-2 bg-gray-100"
-          indicatorClassName="bg-brand-purple-light"
+          indicatorClassName={`${progressPercentage === 100 ? "bg-green-500" : "bg-brand-purple-light"}`}
         />
       </CardContent>
       <CardFooter className="p-4 pt-2 border-t flex items-center justify-between">

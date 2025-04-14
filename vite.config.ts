@@ -12,7 +12,12 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === 'development' &&
-    componentTagger(),
+    componentTagger({
+      tooltip: {
+        content: "Development Build",
+        delayDuration: 0,
+      },
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -20,6 +25,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    target: 'esnext',
+    minify: 'terser',
+    cssMinify: true,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -53,27 +61,30 @@ export default defineConfig(({ mode }) => ({
             '@radix-ui/react-toggle-group',
             '@radix-ui/react-tooltip',
           ],
-          'vendor-utils': [
-            'date-fns',
-            'framer-motion',
-            'react-hook-form',
-            'zod',
-            '@hookform/resolvers',
-            'class-variance-authority',
-            'clsx',
-            'tailwind-merge',
-          ],
+          'vendor-utils': ['date-fns', 'framer-motion', 'lucide-react', 'sonner', 'zod'],
+          'vendor-forms': ['react-hook-form', '@hookform/resolvers'],
           'vendor-charts': ['recharts'],
         },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
-    chunkSizeWarningLimit: 1000,
-    minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true,
-        drop_debugger: true,
+        drop_console: mode === 'production',
       },
     },
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'date-fns',
+      'framer-motion',
+      'lucide-react',
+    ],
   },
 }));

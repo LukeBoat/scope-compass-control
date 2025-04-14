@@ -1,8 +1,7 @@
-import * as React from "react"
+import React from 'react'
+import { cn } from '@/lib/utils'
 
-import { cn } from "@/lib/utils"
-
-const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+const SidebarInput = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   ({ className, type, "aria-label": ariaLabel, "aria-describedby": ariaDescribedby, ...props }, ref) => {
     return (
       <input
@@ -20,6 +19,6 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
     )
   }
 )
-Input.displayName = "Input"
+SidebarInput.displayName = "SidebarInput"
 
-export { Input }
+export { SidebarInput } 

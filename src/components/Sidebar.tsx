@@ -1,118 +1,88 @@
-import { useState } from "react";
-import { useLocation } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SidebarLink } from "@/components/SidebarLink";
-import { 
-  LayoutGrid, 
-  Receipt, 
-  MessageSquare, 
-  Settings, 
-  ChevronLeft, 
-  ChevronRight,
-  HelpCircle,
-  FileText
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { SidebarLink } from './SidebarLink';
+import { LayoutDashboard, Settings, FileText, Users } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
 
-export function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const location = useLocation();
-  
-  const isActive = (path: string) => {
-    return location.pathname.startsWith(path);
-  };
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+  className?: string;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, className }) => {
+  const { pathname } = useLocation();
+
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/projects', label: 'Projects', icon: FileText },
+    { path: '/team', label: 'Team', icon: Users },
+    { path: '/settings', label: 'Settings', icon: Settings },
+  ];
 
   return (
-    <aside 
-      className={cn(
-        "h-screen bg-brand-purple-light border-r border-card-border flex flex-col justify-between transition-all duration-300",
-        isCollapsed ? "w-16" : "w-60"
+    <>
+      {/* Backdrop for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
       )}
-      role="navigation"
-      aria-label="Main navigation"
-    >
-      <div className="p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <h1 className="text-xl font-bold text-brand-purple">
-              <span className="sr-only">Scope Sentinel</span>
-              Scope Sentinel
-            </h1>
-          )}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="h-8 w-8"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
-        </div>
-        
-        <nav className="mt-4 space-y-1" aria-label="Main menu">
-          <SidebarLink 
-            label="Projects" 
-            icon={LayoutGrid} 
-            href="/" 
-            isActive={isActive("/")}
-          />
-          <SidebarLink 
-            label="Invoices" 
-            icon={Receipt} 
-            href="/invoices" 
-            isActive={isActive("/invoices")}
-          />
-          <SidebarLink 
-            label="Feedback" 
-            icon={MessageSquare} 
-            href="/feedback" 
-            isActive={isActive("/feedback")}
-          />
-          <SidebarLink 
-            label="Settings" 
-            icon={Settings} 
-            href="/settings" 
-            isActive={isActive("/settings")}
-          />
-        </nav>
-      </div>
-
-      <div className="p-4 space-y-4">
-        <div className="space-y-1" aria-label="Support menu">
-          <SidebarLink 
-            label="Documentation" 
-            icon={FileText} 
-            href="/docs" 
-            isActive={isActive("/docs")}
-          />
-          <SidebarLink 
-            label="Help & Support" 
-            icon={HelpCircle} 
-            href="/help" 
-            isActive={isActive("/help")}
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Badge 
-            variant="secondary" 
-            className="bg-yellow-100 text-yellow-700"
-            role="status"
-          >
-            Dev Build
-          </Badge>
-          {!isCollapsed && (
-            <div 
-              className="text-xs text-muted-foreground opacity-60"
-              aria-label="Version information"
+      
+      {/* Sidebar */}
+      <aside className={cn(
+        'fixed top-0 left-0 z-40 h-screen bg-card border-r transition-all duration-300 ease-in-out flex flex-col',
+        className
+      )}>
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-semibold">Scope Sentinel</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
             >
-              v0.4.2 (dev)
-            </div>
-          )}
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Navigation */}
+          <ScrollArea className="flex-1">
+            <nav className="space-y-2 p-4">
+              {navItems.map((item) => (
+                <SidebarLink
+                  key={item.path}
+                  to={item.path}
+                  icon={item.icon}
+                  isActive={pathname === item.path || pathname.startsWith(`${item.path}/`)}
+                  onClick={() => {
+                    // Close sidebar on mobile when clicking a link
+                    if (window.innerWidth < 1024) {
+                      onClose();
+                    }
+                  }}
+                >
+                  {item.label}
+                </SidebarLink>
+              ))}
+            </nav>
+          </ScrollArea>
+
+          {/* Footer with Theme Toggle */}
+          <div className="p-4 border-t mt-auto">
+            <ThemeToggle />
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
-} 
+}; 

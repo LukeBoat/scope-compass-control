@@ -33,8 +33,9 @@ const Index = () => {
   useEffect(() => {
     // Simulate loading data
     const timer = setTimeout(() => {
-      setProjects(mockProjects);
-      setFilteredProjects(mockProjects);
+      const mockProjectsList = Object.values(mockProjects);
+      setProjects(mockProjectsList);
+      setFilteredProjects(mockProjectsList);
       setLoading(false);
     }, 1500);
 

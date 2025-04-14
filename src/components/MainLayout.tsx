@@ -1,69 +1,73 @@
 import { useState, useEffect } from "react";
-import { Sidebar } from "@/components/Sidebar";
-import { Button } from "@/components/ui/button";
+import { Outlet } from "react-router-dom";
+import { Sidebar } from "./Sidebar";
+import { Button } from "./ui/button";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MainLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const [isMobile, setIsMobile] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Close sidebar on larger screens and handle initial state
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      setIsSidebarOpen(window.innerWidth >= 768);
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      } else {
+        setSidebarOpen(false);
+      }
     };
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    // Set initial state
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Menu Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 md:hidden"
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
-      >
-        <Menu className="h-6 w-6" />
-      </Button>
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        {/* Mobile Menu Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="fixed top-4 left-4 z-50 lg:hidden"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open menu"
+        >
+          <Menu className="h-6 w-6" />
+        </Button>
 
-      {/* Sidebar */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out",
-        isMobile && !isSidebarOpen && "-translate-x-full"
-      )}>
-        <Sidebar />
-      </div>
-
-      {/* Main Content */}
-      <main 
-        className={cn(
-          "transition-all duration-300",
-          isMobile ? "pl-0" : "pl-60"
+        {/* Backdrop */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-200 ease-in-out lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
         )}
-      >
-        <div className="container mx-auto p-4 md:p-6">
-          {children}
-        </div>
-      </main>
 
-      {/* Mobile Overlay */}
-      {isMobile && isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/20 z-30 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-hidden="true"
+        {/* Sidebar */}
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)}
+          className={cn(
+            "fixed inset-y-0 left-0 z-50 w-[280px] border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+            "transition-all duration-200 ease-in-out lg:relative lg:w-64 lg:translate-x-0",
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          )}
         />
-      )}
+
+        {/* Main Content */}
+        <main className="flex-1 p-4 lg:p-8">
+          {children || <Outlet />}
+        </main>
+      </div>
     </div>
   );
 } 

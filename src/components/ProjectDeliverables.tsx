@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Project, DeliverableStatus, Deliverable } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { toastSuccess, toastError, toastInfo } from "./ToastNotification";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
 
 interface ProjectDeliverablesProps {
   project: Project;
@@ -45,6 +45,9 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
   const [fileUrl, setFileUrl] = useState("");
   const [fileLabel, setFileLabel] = useState("");
   
+  // State for delete confirmation
+  const [deletingDeliverable, setDeletingDeliverable] = useState<{ id: string; name: string } | null>(null);
+
   // Group deliverables by status
   const deliverablesByStatus = {
     "Not Started": project.deliverables.filter(d => d.status === "Not Started"),
@@ -131,15 +134,23 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
   };
 
   const handleDeleteDeliverable = (deliverableId: string, deliverableName: string) => {
+    setDeletingDeliverable({ id: deliverableId, name: deliverableName });
+  };
+  
+  const handleConfirmDelete = () => {
+    if (!deletingDeliverable) return;
+    
     // Find the deliverable to store for potential undo
-    const deliverableToDelete = project.deliverables.find(d => d.id === deliverableId) || null;
+    const deliverableToDelete = project.deliverables.find(d => d.id === deletingDeliverable.id) || null;
     setLastDeletedDeliverable(deliverableToDelete);
     
     // Show toast with undo option
-    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project`, {
+    toastError("Deliverable deleted", `"${deletingDeliverable.name}" has been removed from this project`, {
       onUndo: handleUndoDelete,
       projectColor: "#ea384c" // Red for deletion
     });
+    
+    setDeletingDeliverable(null);
   };
   
   const handleUndoDelete = () => {
@@ -336,6 +347,16 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={!!deletingDeliverable}
+        onClose={() => setDeletingDeliverable(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Deliverable"
+        description="Are you sure you want to delete this deliverable? This action cannot be undone."
+        itemName={deletingDeliverable?.name || ""}
+      />
     </div>
   );
 }

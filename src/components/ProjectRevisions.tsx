@@ -56,6 +56,10 @@ export function ProjectRevisions({ project }: ProjectRevisionsProps) {
   };
 
   const handleAddRevision = () => {
+    if (!selectedDeliverable || !revisionNote.trim()) {
+      return;
+    }
+
     setLastAddedRevision({
       deliverableId: selectedDeliverable,
       note: revisionNote

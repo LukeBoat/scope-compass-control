@@ -1,35 +1,59 @@
-import { useParams } from "react-router-dom";
-import { useProject } from "@/hooks/useProject";
+import { useProjectContext } from "@/contexts/ProjectContext";
 import { ProjectView } from "@/components/ProjectView";
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { ProjectMilestones } from "@/components/ProjectMilestones";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { ScopeChangeTracker } from "@/components/ScopeChangeTracker";
 import { ClientFeedbackView } from "@/components/ClientFeedbackView";
-import ProjectInvoices from "@/pages/ProjectInvoices";
 import { DeliverableDrawer } from "@/components/DeliverableDrawer";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Deliverable } from "@/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
 
 export default function ProjectDetail() {
-  const { projectId } = useParams();
-  const { project, loading, error } = useProject(projectId || '');
+  const { project, loading, error } = useProjectContext();
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null);
+  const navigate = useNavigate();
+
+  // Redirect to home if project is not found after loading
+  useEffect(() => {
+    if (!loading && !project) {
+      navigate("/", { replace: true });
+    }
+  }, [loading, project, navigate]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+      <div className="container mx-auto p-6 space-y-6" role="status" aria-label="Loading project details">
+        <Skeleton className="h-12 w-[250px]" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-[200px]" />
+          <Skeleton className="h-4 w-[150px]" />
+        </div>
+        <Skeleton className="h-[200px] w-full" />
       </div>
     );
   }
 
-  if (error || !project) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Error loading project</div>
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {error.message || "Failed to load project details. Please try again later."}
+          </AlertDescription>
+        </Alert>
       </div>
     );
+  }
+
+  if (!project) {
+    return null; // Will be redirected by useEffect
   }
 
   // Get all deliverables from the project

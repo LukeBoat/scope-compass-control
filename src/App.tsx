@@ -1,115 +1,167 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { Suspense, lazy, useCallback, useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { lazy, Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { MainLayout } from "@/components/MainLayout";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import ProjectDetail from "@/pages/ProjectDetail";
+import { ProjectProvider } from '@/contexts/ProjectContext';
+import { Sidebar } from '@/components/Sidebar';
+import { Menu, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DevModeIndicator } from '@/components/DevModeIndicator';
 
-// Lazy load components
+// Lazy load components with preloading
 const Index = lazy(() => import("@/pages/Index"));
+const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
 const ProjectInvoices = lazy(() => import("@/pages/ProjectInvoices"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-// Create a client
+// Preload components in the background
+const preloadComponents = () => {
+  const components = [Index, ProjectDetail, ProjectInvoices, NotFound];
+  components.forEach(component => {
+    const preload = component as any;
+    if (preload.preload) {
+      preload.preload();
+    }
+  });
+};
+
+// Loading component with fade transition
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-screen animate-fade-in">
+    <Skeleton className="h-8 w-8 rounded-full" />
+  </div>
+);
+
+// Configure React Query with optimized settings
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnMount: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
+      onError: (error) => {
+        console.error('Mutation error:', error);
+      },
     },
   },
 });
 
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="scope-sentinel-theme">
-        <TooltipProvider>
-          <Toaster />
-          <Sonner 
-            position="top-right" 
-            closeButton 
-            richColors 
-            pauseWhenPageIsHidden
-            expand={true}
-            visibleToasts={3}
-            toastOptions={{
-              duration: 4000,
-              className: "group",
-            }}
-          />
-          <BrowserRouter>
-            <MainLayout>
-              <Routes>
-                <Route path="/" element={
-                  <Suspense fallback={
-                    <div className="space-y-4 p-4" role="status" aria-label="Loading projects">
-                      <Skeleton className="h-8 w-1/3" />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {[...Array(8)].map((_, i) => (
-                          <Skeleton key={i} className="h-[200px]" />
-                        ))}
-                      </div>
-                    </div>
-                  }>
-                    <Index />
-                  </Suspense>
-                } />
+// Project routes component with optimized rendering
+const ProjectRoutes = () => {
+  const { projectId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  if (!projectId) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return (
+    <ErrorBoundary>
+      <ProjectProvider projectId={projectId}>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes location={location}>
+            <Route index element={<ProjectDetail />} />
+            <Route path="invoices" element={<ProjectInvoices />} />
+            <Route path="timeline" element={<ProjectDetail />} />
+            <Route path="scope" element={<ProjectDetail />} />
+            <Route path="activity" element={<ProjectDetail />} />
+            <Route path="*" element={<Navigate to="." replace />} />
+          </Routes>
+        </Suspense>
+      </ProjectProvider>
+    </ErrorBoundary>
+  );
+};
+
+// Main App component with optimized state management
+const App = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Preload components after initial render
+  useEffect(() => {
+    preloadComponents();
+  }, []);
+
+  // Check if device is mobile on mount and when window resizes
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+      // Auto-close sidebar on mobile
+      if (window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+
+    // Initial check
+    checkIfMobile();
+
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
+
+  const handleSidebarToggle = useCallback(() => {
+    setIsSidebarOpen(prev => !prev);
+  }, []);
+
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <Router>
+              <div className="flex h-screen bg-background">
+                <Sidebar isOpen={isSidebarOpen} onClose={handleSidebarToggle} />
                 
-                {/* Project Routes */}
-                <Route path="/projects">
-                  <Route index element={<Navigate to="/" replace />} />
-                  <Route path=":projectId" element={
-                    <Suspense fallback={
-                      <div className="flex items-center justify-center min-h-screen" role="status" aria-label="Loading project details">
-                        <Skeleton className="h-8 w-48" />
-                      </div>
-                    }>
-                      <ProjectDetail />
-                    </Suspense>
-                  } />
-                  <Route path=":projectId/invoices" element={
-                    <Suspense fallback={
-                      <div className="space-y-4 p-4" role="status" aria-label="Loading invoices">
-                        <Skeleton className="h-8 w-1/3" />
-                        <Skeleton className="h-[400px]" />
-                      </div>
-                    }>
-                      <ProjectInvoices />
-                    </Suspense>
-                  } />
-                </Route>
-
-                {/* Other Routes */}
-                <Route path="/invoices" element={<Navigate to="/" replace />} />
-                <Route path="/feedback" element={<Navigate to="/" replace />} />
-                <Route path="/settings" element={<Navigate to="/" replace />} />
-                <Route path="/docs" element={<Navigate to="/" replace />} />
-                <Route path="/help" element={<Navigate to="/" replace />} />
-
-                {/* 404 Route */}
-                <Route path="*" element={
-                  <Suspense fallback={
-                    <div className="flex items-center justify-center min-h-screen" role="status" aria-label="Loading error page">
-                      <Skeleton className="h-8 w-48" />
-                    </div>
-                  }>
-                    <NotFound />
+                {/* Mobile menu toggle button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="fixed top-4 left-4 z-50 lg:hidden"
+                  onClick={handleSidebarToggle}
+                  aria-label="Toggle menu"
+                >
+                  <Menu className="h-6 w-6" />
+                </Button>
+                
+                {/* Main content with padding for mobile menu button */}
+                <main className={`flex-1 overflow-auto transition-all duration-300 ${isSidebarOpen ? 'lg:ml-64' : ''} pt-16 lg:pt-0`}>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/projects/:projectId/*" element={<ProjectRoutes />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
                   </Suspense>
-                } />
-              </Routes>
-            </MainLayout>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+                </main>
+              </div>
+              <Toaster />
+              <Sonner />
+              <DevModeIndicator />
+            </Router>
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

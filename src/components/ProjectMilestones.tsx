@@ -1,79 +1,53 @@
-import { useState, useMemo, useEffect, useId, useRef } from "react";
-import { Deliverable, DeliverableStatus, Milestone, MilestoneVisibility } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Calendar, CheckCircle2, Circle, Clock, Check, X, GripVertical, Plus, ChevronDown, ChevronUp, Search, Loader2, Pencil, Trash2, MessageSquare, Eye, Unlock, Lock, AlertCircle } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useState, useMemo, useEffect, useId, useRef, useCallback } from "react";
+import { useParams } from "react-router-dom";
+import { useProject } from "@/hooks/useProject";
+import { useDeliverables } from "@/hooks/useDeliverables";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { useMilestones } from "@/hooks/use-firestore";
-import { toastError, toastSuccess } from "@/components/ToastNotification";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog";
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useDeliverables } from "@/hooks/useDeliverables";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
+import { Milestone as MilestoneType, Deliverable, DeliverableStatus, MilestoneVisibility, Feedback, Revision, MilestoneComment, Project } from "@/types";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { toast } from '@/components/ui/use-toast';
+import { cn } from "@/lib/utils";
+import { Check, GripVertical, X, Clock, Circle, MessageSquare, Loader2, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Lock as LockIcon, Unlock as UnlockIcon, Plus } from "lucide-react";
+import { calculateMilestoneProgress } from "@/utils/milestone";
+import { CSS } from "@dnd-kit/utilities";
+import React from "react";
+import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
 
 interface MilestoneProps {
   projectId: string;
 }
 
-interface EditingDeliverable {
-  id: string;
+interface EditingMilestone {
+  projectId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  startDate?: string;
+  isComplete?: boolean;
+  visibility?: MilestoneVisibility;
+}
+
+interface EditingDeliverable extends Omit<Deliverable, "id" | "feedback" | "revisions" | "name"> {
   name: string;
-  status: DeliverableStatus;
 }
 
 interface NewDeliverable {
@@ -93,180 +67,137 @@ interface MilestoneCommentType {
   updatedAt?: string;
 }
 
+interface NewMilestone {
+  title: string;
+  dueDate: string;
+  startDate: string;
+  description: string;
+  visibility: MilestoneVisibility;
+}
+
+interface Milestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  startDate?: string;
+  isComplete?: boolean;
+  visibility?: MilestoneVisibility;
+  deliverables: Deliverable[];
+  comments?: MilestoneComment[];
+  order?: number;
+}
+
 // Mock data for testing
-const mockMilestones: Milestone[] = [
+const mockDeliverables: Deliverable[] = [
   {
-    id: "1",
-    title: "Phase 1: Planning",
-    dueDate: "2024-03-01",
-    description: "Initial planning and requirements gathering",
-    deliverables: [
-      {
-        id: "1",
-        title: "Project Charter",
-        status: "Approved",
-        dueDate: "2024-02-15",
-        description: "Project charter document",
-        assignedTo: "John Doe",
-        visibility: "Internal"
-      },
-      {
-        id: "2",
-        title: "Requirements Document",
-        status: "Delivered",
-        dueDate: "2024-02-28",
-        description: "Detailed requirements specification",
-        assignedTo: "Jane Smith",
-        visibility: "Client"
-      }
-    ],
-    visibility: "Internal"
+    id: "deliverable-1",
+    projectId: "project-1",
+    name: "Initial Design",
+    title: "Initial Design",
+    status: "Approved",
+    dueDate: "2024-03-15",
+    description: "Complete initial design mockups",
+    assignedTo: "John Doe",
+    visibility: "Internal",
+    notes: "Design should follow brand guidelines",
+    milestoneId: "milestone-1",
+    isApproved: true,
+    feedback: [],
+    revisions: []
   },
   {
-    id: "2",
-    title: "Phase 2: Development",
-    dueDate: "2024-04-01",
-    description: "Core development phase",
-    deliverables: [
-      {
-        id: "3",
-        title: "Frontend Development",
-        status: "In Progress",
-        dueDate: "2024-03-15",
-        description: "Frontend implementation",
-        assignedTo: "Alice Johnson",
-        visibility: "Internal"
-      },
-      {
-        id: "4",
-        title: "Backend Development",
-        status: "Not Started",
-        dueDate: "2024-03-30",
-        description: "Backend implementation",
-        assignedTo: "Bob Wilson",
-        visibility: "Internal"
-      }
-    ],
-    visibility: "Internal"
+    id: "deliverable-2",
+    projectId: "project-1",
+    name: "Frontend Implementation",
+    title: "Frontend Implementation",
+    status: "Delivered",
+    dueDate: "2024-03-20",
+    description: "Implement frontend components",
+    assignedTo: "Jane Smith",
+    visibility: "Client",
+    notes: "Use React components",
+    milestoneId: "milestone-1",
+    isApproved: true,
+    feedback: [],
+    revisions: []
+  },
+  {
+    id: "deliverable-3",
+    projectId: "project-1",
+    name: "Backend API",
+    title: "Backend API",
+    status: "In Progress",
+    dueDate: "2024-03-25",
+    description: "Develop REST API endpoints",
+    assignedTo: "Mike Johnson",
+    visibility: "Internal",
+    notes: "Follow REST best practices",
+    milestoneId: "milestone-2",
+    isApproved: false,
+    feedback: [],
+    revisions: []
+  },
+  {
+    id: "deliverable-4",
+    projectId: "project-1",
+    name: "Testing",
+    title: "Testing",
+    status: "Not Started",
+    dueDate: "2024-03-30",
+    description: "Complete test suite",
+    assignedTo: "Sarah Wilson",
+    visibility: "Internal",
+    notes: "Include unit and integration tests",
+    milestoneId: "milestone-2",
+    isApproved: false,
+    feedback: [],
+    revisions: []
   }
 ];
 
 interface SortableDeliverableCardProps {
   deliverable: Deliverable;
-  isEditing: boolean;
-  editingDeliverable: EditingDeliverable | null;
-  onStartEditing: (deliverable: Deliverable) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  onNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onStatusChange: (status: DeliverableStatus) => void;
+  onEdit: (deliverable: Deliverable) => void;
+  onDelete: (id: string) => void;
 }
 
-function SortableDeliverableCard({
-  deliverable,
-  isEditing,
-  editingDeliverable,
-  onStartEditing,
-  onSaveEdit,
-  onCancelEdit,
-  onNameChange,
-  onStatusChange,
-}: SortableDeliverableCardProps) {
+function SortableDeliverableCard({ deliverable, onEdit, onDelete }: SortableDeliverableCardProps) {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
-    isDragging,
+    isDragging
   } = useSortable({ id: deliverable.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.5 : 1
   };
 
   return (
-    <Card ref={setNodeRef} style={style} className={cn("relative", isDragging && "shadow-lg")}>
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute left-2 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pl-8">
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={editingDeliverable?.name}
-                onChange={onNameChange}
-                className="h-8 w-[200px]"
-                autoFocus
-              />
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={onSaveEdit}
-                  className="rounded-full p-1 hover:bg-muted"
-                >
-                  <Check className="h-4 w-4 text-green-500" />
-                </button>
-                <button
-                  onClick={onCancelEdit}
-                  className="rounded-full p-1 hover:bg-muted"
-                >
-                  <X className="h-4 w-4 text-red-500" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <CardTitle
-              className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
-              onClick={() => onStartEditing(deliverable)}
-            >
-              {deliverable.name}
-            </CardTitle>
-          )}
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <Card className="p-4 mb-2">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4 className="font-medium">{deliverable.title}</h4>
+            <p className="text-sm text-gray-500">{deliverable.description}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => onEdit(deliverable)}>
+              Edit
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => onDelete(deliverable.id)}>
+              Delete
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <Select
-              value={editingDeliverable?.status}
-              onValueChange={onStatusChange}
-            >
-              <SelectTrigger className="h-8 w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Not Started">Not Started</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Delivered">Delivered</SelectItem>
-                <SelectItem value="Approved">Approved</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <>
-              {getStatusIcon(deliverable.status)}
-              <Badge
-                variant="outline"
-                className="flex items-center gap-1 cursor-pointer hover:bg-muted transition-colors"
-                onClick={() => onStartEditing(deliverable)}
-              >
-                <Calendar className="h-3 w-3" />
-                {formatDate(deliverable.dueDate)}
-              </Badge>
-            </>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-sm text-muted-foreground">
-          Status: {deliverable.status}
-        </div>
-      </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
@@ -275,7 +206,7 @@ const getStatusIcon = (status: DeliverableStatus) => {
   switch (status) {
     case "Approved":
     case "Delivered":
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      return <Check className="h-4 w-4 text-green-500" />;
     case "In Progress":
       return <Clock className="h-4 w-4 text-blue-500" />;
     default:
@@ -317,7 +248,7 @@ function AddDeliverableForm({
 }: {
   onSave: (deliverable: NewDeliverable) => void;
   onCancel: () => void;
-  milestones: Milestone[];
+  milestones: MilestoneType[];
   currentMilestoneId?: string;
 }) {
   const [name, setName] = useState("");
@@ -504,12 +435,13 @@ function MilestoneComments({ milestoneId, comments, onAddComment }: MilestoneCom
 interface MilestoneFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (milestone: Omit<Milestone, "id" | "deliverables" | "comments">) => void;
-  initialData?: Milestone;
+  onSubmit: (milestone: Omit<MilestoneType, "id" | "deliverables" | "comments">) => void;
+  initialData?: MilestoneType;
   onDelete?: () => void;
 }
 
 function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: MilestoneFormProps) {
+  const { project } = useProject(initialData?.projectId || "");
   const [title, setTitle] = useState(initialData?.title || "");
   const [dueDate, setDueDate] = useState<Date | undefined>(
     initialData?.dueDate ? new Date(initialData.dueDate) : undefined
@@ -523,6 +455,12 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
     initialData?.visibility || "Public"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<{
+    title?: string;
+    dueDate?: string;
+    startDate?: string;
+    description?: string;
+  }>({});
 
   // Reset form when initialData changes
   useEffect(() => {
@@ -541,15 +479,83 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
       setIsComplete(false);
       setVisibility("Public");
     }
+    // Clear errors when form is reset
+    setFormErrors({});
   }, [initialData]);
+
+  // Real-time validation
+  useEffect(() => {
+    const errors: {
+      title?: string;
+      dueDate?: string;
+      startDate?: string;
+      description?: string;
+    } = {};
+
+    // Title validation
+    if (!title.trim()) {
+      errors.title = "Title is required";
+    } else if (title.length < 3) {
+      errors.title = "Title must be at least 3 characters long";
+    } else if (title.length > 100) {
+      errors.title = "Title must be less than 100 characters";
+    }
+
+    // Description validation
+    if (description.length > 1000) {
+      errors.description = "Description must be less than 1000 characters";
+    }
+
+    // Date validation
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (startDate) {
+      if (startDate < today) {
+        errors.startDate = "Start date cannot be in the past";
+      }
+    }
+
+    if (dueDate) {
+      if (dueDate < today) {
+        errors.dueDate = "Due date cannot be in the past";
+      }
+      if (startDate && dueDate < startDate) {
+        errors.dueDate = "Due date must be after start date";
+      }
+    }
+
+    // Project timeline validation
+    if (project) {
+      const projectStartDate = new Date(project.startDate);
+      const projectEndDate = new Date(project.endDate);
+
+      if (startDate && startDate < projectStartDate) {
+        errors.startDate = "Start date must be within project timeline";
+      }
+      if (dueDate && dueDate > projectEndDate) {
+        errors.dueDate = "Due date must be within project timeline";
+      }
+    }
+
+    setFormErrors(errors);
+  }, [title, description, startDate, dueDate, project]);
+
+  const validateForm = (): boolean => {
+    return Object.keys(formErrors).length === 0;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    
+    if (!validateForm()) {
+      return;
+    }
     
     setIsSubmitting(true);
     
     onSubmit({
+      projectId: project.id,
       title: title.trim(),
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
       startDate: startDate ? startDate.toISOString().split('T')[0] : undefined,
@@ -573,8 +579,8 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
               : "Fill in the details to create a new milestone."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -583,60 +589,100 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Milestone title"
                 required
+                aria-invalid={!!formErrors.title}
+                aria-describedby={formErrors.title ? "title-error" : undefined}
+                className={cn(formErrors.title && "border-red-500 focus-visible:ring-red-500")}
               />
+              {formErrors.title && (
+                <p id="title-error" className="text-sm text-red-500">
+                  {formErrors.title}
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="startDate">Start Date (Optional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dueDate">Due Date (Optional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "justify-start text-left font-normal",
-                        !dueDate && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
+            
+            <div className="grid gap-2">
+              <Label htmlFor="startDate">Start Date (Optional)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground",
+                      formErrors.startDate && "border-red-500"
+                    )}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              {formErrors.startDate && (
+                <p className="text-sm text-red-500">
+                  {formErrors.startDate}
+                </p>
+              )}
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="dueDate">Due Date (Optional)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !dueDate && "text-muted-foreground",
+                      formErrors.dueDate && "border-red-500"
+                    )}
+                  >
+                    <Calendar
                       mode="single"
                       selected={dueDate}
                       onSelect={setDueDate}
                       initialFocus
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today;
+                      }}
                     />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate}
+                    onSelect={setDueDate}
+                    initialFocus
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              {formErrors.dueDate && (
+                <p className="text-sm text-red-500">
+                  {formErrors.dueDate}
+                </p>
+              )}
             </div>
+            
             <div className="grid gap-2">
               <Label htmlFor="description">Description (Optional)</Label>
               <Textarea
@@ -645,49 +691,48 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Milestone description"
                 rows={3}
+                className={cn(formErrors.description && "border-red-500 focus-visible:ring-red-500")}
+                aria-invalid={!!formErrors.description}
+                aria-describedby={formErrors.description ? "description-error" : undefined}
               />
+              {formErrors.description && (
+                <p id="description-error" className="text-sm text-red-500">
+                  {formErrors.description}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                {description.length}/1000 characters
+              </p>
             </div>
+            
             <div className="grid gap-2">
               <Label htmlFor="visibility">Visibility</Label>
-              <Select 
-                value={visibility} 
+              <Select
+                value={visibility}
                 onValueChange={(value: MilestoneVisibility) => setVisibility(value)}
               >
-                <SelectTrigger id="visibility">
-                  <SelectValue />
+                <SelectTrigger>
+                  <SelectValue placeholder="Select visibility" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Public">
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4" />
-                      <span>Public</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Client">
-                    <div className="flex items-center gap-2">
-                      <Unlock className="h-4 w-4" />
-                      <span>Client</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Internal">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4" />
-                      <span>Internal</span>
-                    </div>
-                  </SelectItem>
+                  <SelectItem value="Public">Public</SelectItem>
+                  <SelectItem value="Internal">Internal</SelectItem>
+                  <SelectItem value="Private">Private</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
             <div className="flex items-center space-x-2">
               <Switch
                 id="isComplete"
                 checked={isComplete}
                 onCheckedChange={setIsComplete}
               />
-              <Label htmlFor="isComplete">Mark as Complete</Label>
+              <Label htmlFor="isComplete">Mark as complete</Label>
             </div>
           </div>
-          <DialogFooter className="flex justify-between">
+          
+          <DialogFooter>
             {initialData && onDelete && (
               <Button
                 type="button"
@@ -695,33 +740,27 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
                 onClick={onDelete}
                 disabled={isSubmitting}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </Button>
             )}
-            <div className="flex gap-2 ml-auto">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Check className="mr-2 h-4 w-4" />
-                    {initialData ? "Save Changes" : "Create Milestone"}
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting || !validateForm()}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -729,33 +768,25 @@ function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: 
   );
 }
 
-interface SortableMilestoneItemProps {
+interface MilestoneItemProps {
   milestone: Milestone;
-  daysUntilDue: number | null;
-  isComplete: boolean;
-  progress: number;
-  isHighlighted: boolean;
-  expandedItems: string[];
-  onAccordionChange: (value: string[]) => void;
-  onEdit: (milestone: Milestone) => void;
-  onDelete: (id: string) => void;
-  onAddDeliverable: (milestoneId: string) => void;
-  milestoneRef: (el: HTMLDivElement | null) => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAddDeliverable: () => void;
+  updateState: (updates: Partial<Milestone>) => void;
 }
 
 function SortableMilestoneItem({
   milestone,
-  daysUntilDue,
-  isComplete,
-  progress,
-  isHighlighted,
-  expandedItems,
-  onAccordionChange,
+  isExpanded,
+  onToggle,
   onEdit,
   onDelete,
   onAddDeliverable,
-  milestoneRef,
-}: SortableMilestoneItemProps) {
+  updateState
+}: MilestoneItemProps) {
   const {
     attributes,
     listeners,
@@ -766,93 +797,76 @@ function SortableMilestoneItem({
   } = useSortable({ id: milestone.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1 : 0,
+  };
+
+  const handleStatusChange = (status: DeliverableStatus) => {
+    updateState({ isComplete: status === "Approved" || status === "Delivered" });
   };
 
   return (
-    <AccordionItem 
-      value={milestone.id}
+    <AccordionItem
       ref={setNodeRef}
       style={style}
+      value={milestone.id}
       className={cn(
-        "relative",
-        isDragging && "shadow-lg z-10"
+        "relative rounded-lg border p-4 mb-4 transition-all duration-200",
+        isDragging && "shadow-lg ring-2 ring-brand-purple",
+        isExpanded && "ring-2 ring-brand-purple"
       )}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute left-2 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
+      <div 
+        {...attributes} 
+        {...listeners} 
+        className={cn(
+          "absolute left-2 top-1/2 -translate-y-1/2 cursor-grab p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
+          isDragging && "cursor-grabbing"
+        )}
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
-      <AccordionTrigger className="pl-8 hover:no-underline">
-        <div className="flex flex-col items-start gap-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{milestone.title}</span>
-            {isComplete && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Complete
-              </Badge>
-            )}
-            {milestone.dueDate && (
-              <>
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatDate(milestone.dueDate)}
-                </Badge>
-                <Badge 
-                  variant={getDueBadgeVariant(daysUntilDue)} 
-                  className="flex items-center gap-1"
-                >
-                  {daysUntilDue < 0 
-                    ? `Overdue by ${Math.abs(daysUntilDue)} days` 
-                    : `Due in ${daysUntilDue} days`}
-                </Badge>
-              </>
-            )}
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(milestone);
-                }}
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(milestone.id);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+      
+      <div className="flex items-center justify-between w-full pl-8">
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold">{milestone.title}</h3>
+              {milestone.visibility === "Internal" && (
+                <LockIcon className="h-4 w-4 text-muted-foreground" />
+              )}
+              {milestone.visibility === "Client" && (
+                <UnlockIcon className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              {milestone.dueDate ? (
+                <>
+                  {calculateDaysUntilDue(milestone.dueDate) < 0 ? (
+                    <Badge variant="destructive" className="text-xs">
+                      {Math.abs(calculateDaysUntilDue(milestone.dueDate))} days overdue
+                    </Badge>
+                  ) : calculateDaysUntilDue(milestone.dueDate) === 0 ? (
+                    <Badge variant="secondary" className="text-xs">
+                      Due today
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" className="text-xs">
+                      {calculateDaysUntilDue(milestone.dueDate)} days left
+                    </Badge>
+                  )}
+                </>
+              ) : (
+                <span>No due date</span>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Progress
-              value={progress}
-              className={cn(
-                "h-2 w-32",
-                isComplete && "bg-green-100 [&>div]:bg-green-500"
-              )}
-            />
-            <span>
-              {Math.round(progress)}%
-            </span>
-          </div>
         </div>
-      </AccordionTrigger>
+      </div>
+
       <AccordionContent>
         <div className="space-y-4 pt-4">
           {milestone.description && (
@@ -864,38 +878,20 @@ function SortableMilestoneItem({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onAddDeliverable(milestone.id)}
+              onClick={onAddDeliverable}
               className="flex items-center gap-1"
             >
               <Plus className="h-4 w-4" />
               Add Deliverable
             </Button>
           </div>
-          {addingDeliverableToMilestoneId === milestone.id && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AddDeliverableForm
-                onSave={(newDeliverable) => {
-                  handleAddDeliverable(milestone.id, newDeliverable);
-                  setAddingDeliverableToMilestoneId(null);
-                }}
-                onCancel={() => setAddingDeliverableToMilestoneId(null)}
-                milestones={milestones}
-                currentMilestoneId={milestone.id}
-              />
-            </motion.div>
-          )}
           <SortableContext
-            items={getFilteredDeliverables(milestone.deliverables).map((d) => d.id)}
+            items={milestone.deliverables.map((d) => d.id)}
             strategy={verticalListSortingStrategy}
           >
             <AnimatePresence>
-              {getFilteredDeliverables(milestone.deliverables).length > 0 ? (
-                getFilteredDeliverables(milestone.deliverables).map((deliverable) => (
+              {milestone.deliverables.length > 0 ? (
+                milestone.deliverables.map((deliverable) => (
                   <motion.div
                     key={deliverable.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -905,13 +901,8 @@ function SortableMilestoneItem({
                   >
                     <SortableDeliverableCard
                       deliverable={deliverable}
-                      isEditing={editingDeliverable?.id === deliverable.id}
-                      editingDeliverable={editingDeliverable}
-                      onStartEditing={handleStartEditing}
-                      onSaveEdit={handleSaveEdit}
-                      onCancelEdit={handleCancelEdit}
-                      onNameChange={handleNameChange}
-                      onStatusChange={handleStatusChange}
+                      onEdit={(d) => handleStatusChange(d.status)}
+                      onDelete={(id) => onDelete()}
                     />
                   </motion.div>
                 ))
@@ -928,597 +919,414 @@ function SortableMilestoneItem({
   );
 }
 
-export function ProjectMilestones({ projectId }: MilestoneProps) {
-  const { milestones, loading, error } = useMilestones(projectId);
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+// Utility function to calculate overall progress
+const calculateOverallProgress = (project: Project | null): number => {
+  if (!project?.milestones.length) return 0;
+  const totalProgress = project.milestones.reduce((acc, milestone) => {
+    const milestoneProgress = calculateMilestoneProgress(milestone.deliverables);
+    return acc + milestoneProgress;
+  }, 0);
+  return Math.round(totalProgress / project.milestones.length);
+};
+
+const DELIVERABLE_STATUSES = {
+  "Not Started": "Not Started",
+  "In Progress": "In Progress",
+  "Delivered": "Delivered",
+  "Approved": "Approved",
+  "Rejected": "Rejected",
+  "In Review": "In Review"
+} as const;
+
+// Memoized components for better performance
+const MemoizedSortableDeliverableCard = React.memo(SortableDeliverableCard);
+const MemoizedMilestoneForm = React.memo(MilestoneForm);
+const MemoizedAddDeliverableForm = React.memo(AddDeliverableForm);
+
+// Constants for pagination
+const MILESTONES_PER_PAGE = 5;
+const DELIVERABLES_PER_PAGE = 10;
+
+export function ProjectMilestones({ projectId }: { projectId: string }) {
+  const { project, updateProject } = useProject(projectId);
+  const { deliverables, addDeliverable, updateDeliverable, deleteDeliverable } = useDeliverables(projectId);
+  const [editingMilestone, setEditingMilestone] = useState<EditingMilestone | null>(null);
   const [editingDeliverable, setEditingDeliverable] = useState<EditingDeliverable | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [draggedMilestone, setDraggedMilestone] = useState<Milestone | null>(null);
-  const [isCreateMilestoneOpen, setIsCreateMilestoneOpen] = useState(false);
-  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   const [addingDeliverableToMilestoneId, setAddingDeliverableToMilestoneId] = useState<string | null>(null);
-  const [newMilestoneId, setNewMilestoneId] = useState<string | null>(null);
-  const [highlightedMilestoneId, setHighlightedMilestoneId] = useState<string | null>(null);
-  const milestoneRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deletingDeliverable, setDeletingDeliverable] = useState<{ id: string; name: string } | null>(null);
   
-  // New state for milestone form
-  const [milestoneFormOpen, setMilestoneFormOpen] = useState(false);
-  const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<"client" | "internal">("internal"); // For testing
-  const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
-  const { deliverables, addDeliverable, updateDeliverable } = useDeliverables(projectId);
+  // Pagination state
+  const [milestonePage, setMilestonePage] = useState(1);
+  const [deliverablePages, setDeliverablePages] = useState<Record<string, number>>({});
+  const [hasMoreMilestones, setHasMoreMilestones] = useState(true);
+  const [hasMoreDeliverables, setHasMoreDeliverables] = useState<Record<string, boolean>>({});
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+  const [showDeliverableForm, setShowDeliverableForm] = useState(false);
 
-  // Update local state when fetched data changes
-  useEffect(() => {
-    if (milestones.length > 0) {
-      setMilestones(milestones);
-    }
-  }, [milestones]);
-
-  // Show error toast if there's an error
-  useEffect(() => {
-    if (error) {
-      toastError("Error loading milestones", error.message);
-    }
-  }, [error]);
-
-  // Sort milestones by due date
-  const sortedMilestones = useMemo(() => {
-    return [...milestones].sort((a, b) => {
-      // Handle milestones without due dates
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1; // Milestones without due dates go to the end
-      if (!b.dueDate) return -1;
-      
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    });
-  }, [milestones]);
-
-  // Get all deliverables from all milestones
-  const allDeliverables = useMemo(() => {
-    return milestones.flatMap(milestone => milestone.deliverables);
-  }, [milestones]);
-
-  // Get unassigned deliverables
-  const unassignedDeliverables = useMemo(() => {
-    return allDeliverables.filter(deliverable => !deliverable.milestoneId);
-  }, [allDeliverables]);
-
-  // Filter deliverables based on status and search query
-  const getFilteredDeliverables = (deliverables: Deliverable[]) => {
-    return deliverables.filter(deliverable => {
-      const matchesStatus = statusFilter === "All" || deliverable.status === statusFilter;
-      const matchesSearch = searchQuery === "" || 
-        deliverable.name.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      return matchesStatus && matchesSearch;
-    });
-  };
-
-  const calculateMilestoneProgress = (deliverables: Deliverable[]) => {
-    const completed = deliverables.filter(
-      (d) => d.status === "Delivered" || d.status === "Approved"
-    ).length;
-    return (completed / deliverables.length) * 100;
-  };
-
-  const handleStartEditing = (deliverable: Deliverable) => {
-    setEditingDeliverable({
-      id: deliverable.id,
-      name: deliverable.name,
-      status: deliverable.status,
-    });
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingDeliverable) return;
-
-    setMilestones((prevMilestones) =>
-      prevMilestones.map((milestone) => ({
-        ...milestone,
-        deliverables: milestone.deliverables.map((deliverable) =>
-          deliverable.id === editingDeliverable.id
-            ? {
-                ...deliverable,
-                name: editingDeliverable.name,
-                status: editingDeliverable.status,
-              }
-            : deliverable
-        ),
-      }))
+  // Memoized filtered milestones
+  const filteredMilestones = useMemo(() => {
+    if (!project?.milestones) return [];
+    return project.milestones.filter(milestone => 
+      milestone.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      milestone.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
+  }, [project?.milestones, searchQuery]);
 
-    setEditingDeliverable(null);
-  };
+  // Paginated milestones
+  const paginatedMilestones = useMemo(() => {
+    return filteredMilestones.slice(0, milestonePage * MILESTONES_PER_PAGE);
+  }, [filteredMilestones, milestonePage]);
 
-  const handleCancelEdit = () => {
-    setEditingDeliverable(null);
-  };
+  // Check if there are more milestones to load
+  useEffect(() => {
+    setHasMoreMilestones(paginatedMilestones.length < filteredMilestones.length);
+  }, [paginatedMilestones, filteredMilestones]);
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editingDeliverable) return;
-    setEditingDeliverable({
-      ...editingDeliverable,
-      name: e.target.value,
+  // Memoized deliverables for each milestone
+  const deliverablesByMilestone = useMemo(() => {
+    const map = new Map<string, Deliverable[]>();
+    deliverables.forEach(deliverable => {
+      if (deliverable.milestoneId) {
+        const existing = map.get(deliverable.milestoneId) || [];
+        map.set(deliverable.milestoneId, [...existing, deliverable]);
+      }
     });
-  };
+    return map;
+  }, [deliverables]);
 
-  const handleStatusChange = (newStatus: DeliverableStatus) => {
-    if (!editingDeliverable) return;
-    setEditingDeliverable({
-      ...editingDeliverable,
-      status: newStatus,
-    });
-  };
+  // Get paginated deliverables for a milestone
+  const getPaginatedDeliverables = useCallback((milestoneId: string) => {
+    const milestoneDeliverables = deliverablesByMilestone.get(milestoneId) || [];
+    const page = deliverablePages[milestoneId] || 1;
+    return milestoneDeliverables.slice(0, page * DELIVERABLES_PER_PAGE);
+  }, [deliverablesByMilestone, deliverablePages]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveId(active.id as string);
-    const milestone = milestones.find(m => m.id === active.id);
-    if (milestone) {
-      setDraggedMilestone(milestone);
+  // Check if there are more deliverables to load for a milestone
+  const hasMoreDeliverablesForMilestone = useCallback((milestoneId: string) => {
+    const milestoneDeliverables = deliverablesByMilestone.get(milestoneId) || [];
+    const page = deliverablePages[milestoneId] || 1;
+    return milestoneDeliverables.length > page * DELIVERABLES_PER_PAGE;
+  }, [deliverablesByMilestone, deliverablePages]);
+
+  // Load more deliverables for a milestone
+  const loadMoreDeliverables = useCallback((milestoneId: string) => {
+    setDeliverablePages(prev => ({
+      ...prev,
+      [milestoneId]: (prev[milestoneId] || 1) + 1
+    }));
+  }, []);
+
+  // Load more milestones
+  const loadMoreMilestones = useCallback(() => {
+    setMilestonePage(prev => prev + 1);
+  }, []);
+
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setMilestonePage(1);
+  }, [searchQuery]);
+
+  // Memoized handlers
+  const handleAddDeliverable = useCallback(async (milestoneId: string, name: string) => {
+    if (!project) return;
+    
+    try {
+      setIsLoading(true);
+      const newDeliverable: Omit<Deliverable, "id"> = {
+        projectId,
+        name,
+        title: name,
+        status: "pending" as DeliverableStatus,
+        dueDate: new Date().toISOString(),
+        description: "",
+        assignedTo: "",
+        visibility: "public" as MilestoneVisibility,
+        notes: "",
+        milestoneId,
+        isApproved: false,
+        feedback: [],
+        revisions: []
+      };
+      
+      await addDeliverable(newDeliverable);
+      setAddingDeliverableToMilestoneId(null);
+    } catch (error) {
+      setError(error as Error);
+      console.error("Error adding deliverable:", error);
+    } finally {
+      setIsLoading(false);
     }
+  }, [project, projectId, addDeliverable]);
+
+  const handleUpdateDeliverable = useCallback(async (deliverableId: string, updates: Partial<Deliverable>) => {
+    try {
+      setIsLoading(true);
+      await updateDeliverable(deliverableId, updates);
+      setEditingDeliverable(null);
+    } catch (error) {
+      setError(error as Error);
+      console.error("Error updating deliverable:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateDeliverable]);
+
+  const handleDeleteDeliverable = useCallback(async (deliverableId: string) => {
+    const deliverable = deliverables.find(d => d.id === deliverableId);
+    if (deliverable) {
+      setDeletingDeliverable({ id: deliverableId, name: deliverable.title });
+    }
+  }, [deliverables]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deletingDeliverable) return;
+    
+    try {
+      setIsLoading(true);
+      await deleteDeliverable(deletingDeliverable.id);
+      setDeletingDeliverable(null);
+    } catch (error) {
+      setError(error as Error);
+      console.error("Error deleting deliverable:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [deletingDeliverable, deleteDeliverable]);
+
+  const handleEditDeliverable = (deliverable: Deliverable) => {
+    setEditingDeliverable({
+      name: deliverable.name,
+      projectId: deliverable.projectId,
+      status: deliverable.status,
+      dueDate: deliverable.dueDate,
+      notes: deliverable.notes,
+      milestoneId: deliverable.milestoneId,
+      isApproved: deliverable.isApproved,
+      title: deliverable.title || deliverable.name,
+      description: deliverable.description,
+      assignedTo: deliverable.assignedTo,
+      visibility: deliverable.visibility
+    });
+    setShowDeliverableForm(true);
   };
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const sourceIndex = result.source.index;
-    const destIndex = result.destination.index;
-    const sourceDroppableId = result.source.droppableId;
-    const destDroppableId = result.destination.droppableId;
-
-    // Handle reordering within the same milestone
-    if (sourceDroppableId === destDroppableId) {
-      const milestone = milestones.find(m => m.id === sourceDroppableId);
+  // Memoized milestone handlers
+  const handleUpdateMilestone = useCallback(async (milestoneId: string, updates: Partial<Milestone>) => {
+    try {
+      const milestone = project.milestones.find(m => m.id === milestoneId);
       if (!milestone) return;
 
-      const newDeliverables = Array.from(deliverables.filter(d => d.milestoneId === milestone.id));
-      const [removed] = newDeliverables.splice(sourceIndex, 1);
-      newDeliverables.splice(destIndex, 0, removed);
-
-      // Update milestone with new deliverable order
-      updateMilestone({
+      const updatedMilestone = {
         ...milestone,
-        deliverableIds: newDeliverables.map(d => d.id)
-      });
-    } else {
-      // Handle moving between milestones
-      const deliverable = deliverables.find(d => d.id === result.draggableId);
-      if (!deliverable) return;
+        ...updates,
+        projectId // Ensure projectId is preserved
+      };
 
-      updateDeliverable({
-        ...deliverable,
-        milestoneId: destDroppableId
-      });
+      await updateProject({ ...project, milestones: project.milestones.map(m => m.id === milestoneId ? updatedMilestone : m) });
+    } catch (error) {
+      console.error("Error updating milestone:", error);
     }
-  };
+  }, [project, updateProject]);
 
-  const handleAddDeliverable = (milestoneId: string, name: string) => {
-    addDeliverable({
-      id: crypto.randomUUID(),
-      projectId,
-      milestoneId,
-      name,
-      status: "Not Started",
-      dueDate: new Date().toISOString(),
-      isApproved: false,
-      revisions: [],
-      feedback: []
+  const handleDeleteMilestone = useCallback(async (milestoneId: string) => {
+    if (!project) return;
+    
+    try {
+      setIsLoading(true);
+      const updatedMilestones = project.milestones.filter(m => m.id !== milestoneId);
+      await updateProject({ ...project, milestones: updatedMilestones });
+    } catch (error) {
+      setError(error as Error);
+      console.error("Failed to delete milestone:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [project, updateProject]);
+
+  const handleCreateMilestone = useCallback(async () => {
+    try {
+      const newMilestone: Omit<MilestoneType, "id" | "comments" | "deliverables"> = {
+        projectId,
+        title: editingMilestone.title,
+        description: editingMilestone.description,
+        dueDate: editingMilestone.dueDate,
+        startDate: editingMilestone.startDate,
+        isComplete: editingMilestone.isComplete ?? false,
+        visibility: editingMilestone.visibility,
+        order: project.milestones.length
+      };
+
+      const milestoneWithDefaults: MilestoneType = {
+        ...newMilestone,
+        id: "", // This will be replaced by the backend
+        deliverables: [],
+        comments: []
+      };
+
+      await updateProject({
+        ...project,
+        milestones: [...project.milestones, milestoneWithDefaults]
+      });
+      setShowMilestoneForm(false);
+      setEditingMilestone({} as EditingMilestone);
+    } catch (error) {
+      console.error("Error creating milestone:", error);
+    }
+  }, [projectId, editingMilestone, project.milestones.length, updateProject]);
+
+  const handleEditMilestone = useCallback((milestone: MilestoneType) => {
+    setEditingMilestone({
+      projectId: milestone.projectId,
+      title: milestone.title,
+      description: milestone.description,
+      dueDate: milestone.dueDate,
+      startDate: milestone.startDate,
+      isComplete: milestone.isComplete,
+      visibility: milestone.visibility
     });
-    setAddingDeliverableToMilestoneId(null);
-  };
+    setShowMilestoneForm(true);
+  }, []);
 
-  const handleExpandAll = () => {
-    setExpandedItems(sortedMilestones.map(milestone => milestone.id));
-  };
-
-  const handleCollapseAll = () => {
-    setExpandedItems([]);
-  };
-
-  const handleAccordionChange = (value: string[]) => {
-    setExpandedItems(value);
-  };
-
-  // New functions for milestone management
-  const handleCreateMilestone = (newMilestone: Omit<Milestone, "id" | "deliverables">) => {
-    const id = useId();
-    const milestone: Milestone = {
-      id,
-      title: newMilestone.title,
-      dueDate: newMilestone.dueDate,
-      description: newMilestone.description,
-      isComplete: newMilestone.isComplete,
-      deliverables: [],
-      order: milestones.length, // Set order to the end of the list
-    };
+  const handleDragEnd = useCallback((event: any) => {
+    const { active, over } = event;
     
-    setMilestones((prev) => [...prev, milestone]);
-    setExpandedItems((prev) => [...prev, id]);
-    setNewMilestoneId(id);
-    
-    // Auto-scroll to the new milestone after a short delay
-    setTimeout(() => {
-      const element = milestoneRefs.current[id];
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth" });
-        setHighlightedMilestoneId(id);
-        
-        // Remove highlight after 1.5 seconds for a quicker flash
-        setTimeout(() => {
-          setHighlightedMilestoneId(null);
-        }, 1500);
-      }
-    }, 100);
-  };
-
-  const handleUpdateMilestone = (updatedMilestone: Omit<Milestone, "id" | "deliverables">) => {
-    if (!editingMilestone) return;
-    
-    setMilestones((prev) =>
-      prev.map((milestone) =>
-        milestone.id === editingMilestone.id
-          ? {
-              ...milestone,
-              title: updatedMilestone.title,
-              dueDate: updatedMilestone.dueDate,
-              description: updatedMilestone.description,
-              isComplete: updatedMilestone.isComplete,
-            }
-          : milestone
-      )
-    );
-    
-    setEditingMilestone(null);
-  };
-
-  const handleDeleteMilestone = (id: string) => {
-    setMilestones((prev) => prev.filter((milestone) => milestone.id !== id));
-    setExpandedItems((prev) => prev.filter((itemId) => itemId !== id));
-    setDeleteMilestoneId(null);
-  };
-
-  const openMilestoneForm = (milestone?: Milestone) => {
-    if (milestone) {
-      setEditingMilestone(milestone);
-    } else {
-      setEditingMilestone(null);
+    if (active.id !== over.id) {
+      const oldIndex = project.milestones.findIndex(m => m.id === active.id);
+      const newIndex = project.milestones.findIndex(m => m.id === over.id);
+      
+      const reorderedMilestones = arrayMove(project.milestones, oldIndex, newIndex).map(
+        (milestone, index) => ({ ...milestone, order: index })
+      );
+      
+      updateProject({ ...project, milestones: reorderedMilestones });
     }
-    setMilestoneFormOpen(true);
-  };
-
-  const handleAddComment = (milestoneId: string, content: string) => {
-    const newComment: MilestoneCommentType = {
-      id: useId(),
-      milestoneId,
-      userId: "current-user-id", // This should come from your auth context
-      userName: "Current User", // This should come from your auth context
-      content,
-      createdAt: new Date().toISOString(),
-    };
-
-    setMilestones((prevMilestones) =>
-      prevMilestones.map((milestone) =>
-        milestone.id === milestoneId
-          ? {
-              ...milestone,
-              comments: [...(milestone.comments || []), newComment],
-            }
-          : milestone
-      )
-    );
-  };
-
-  const filteredMilestones = useMemo(() => {
-    return milestones
-      .filter(milestone => {
-        // Filter by search query
-        const matchesSearch = milestone.title.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        // Filter by visibility based on user role
-        const matchesVisibility = userRole === "client" 
-          ? milestone.visibility === "Public" || milestone.visibility === "Client"
-          : true;
-        
-        return matchesSearch && matchesVisibility;
-      })
-      .sort((a, b) => {
-        // First sort by order if available
-        if (a.order !== undefined && b.order !== undefined) {
-          return a.order - b.order;
-        }
-        
-        // Fall back to due date sorting
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      });
-  }, [milestones, searchQuery, userRole]);
-
-  // Calculate overall project progress
-  const overallProgress = useMemo(() => {
-    if (allDeliverables.length === 0) return 0;
-    
-    const completedDeliverables = allDeliverables.filter(
-      d => d.status === "Delivered" || d.status === "Approved"
-    ).length;
-    
-    return Math.round((completedDeliverables / allDeliverables.length) * 100);
-  }, [allDeliverables]);
+  }, [project, updateProject]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-center justify-center mb-8">
-        <img
-          src="/assets/logo.svg"
-          alt="Scope Sentinel"
-          className="h-16 mb-4"
-        />
-      </div>
-      
-      {/* Overall Progress Bar */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Overall Progress</h3>
-          <span className="text-sm text-muted-foreground">{overallProgress}%</span>
-        </div>
-        <Progress 
-          value={overallProgress} 
-          className="h-2"
-        />
-      </div>
-      
+    <div className="space-y-4" role="region" aria-label="Project Milestones">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Project Milestones</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => openMilestoneForm()}
-            className="bg-brand-purple hover:bg-brand-purple/90"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Milestone
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExpandAll}
-            className="flex items-center gap-1"
-          >
-            <ChevronDown className="h-4 w-4" />
-            Expand All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCollapseAll}
-            className="flex items-center gap-1"
-          >
-            <ChevronUp className="h-4 w-4" />
-            Collapse All
-          </Button>
-        </div>
-      </div>
-      
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <h2 className="text-2xl font-bold">Milestones</h2>
+        <div className="flex items-center space-x-2">
           <Input
-            placeholder="Search deliverables..."
+            type="search"
+            placeholder="Search milestones..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
+            aria-label="Search milestones"
+            className="w-64"
           />
+          <Dialog open={showMilestoneForm} onOpenChange={setShowMilestoneForm}>
+            <DialogTrigger asChild>
+              <Button aria-label="Add new milestone">Add Milestone</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Milestone</DialogTitle>
+              </DialogHeader>
+              {/* Milestone form content */}
+            </DialogContent>
+          </Dialog>
         </div>
-        <Select value={statusFilter} onValueChange={(value: DeliverableStatus | "All") => setStatusFilter(value)}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Statuses</SelectItem>
-            <SelectItem value="Not Started">Not Started</SelectItem>
-            <SelectItem value="In Progress">In Progress</SelectItem>
-            <SelectItem value="Delivered">Delivered</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
-      
+
       <DndContext
-        sensors={sensors}
-        onDragStart={handleDragStart}
+        sensors={useSensors(
+          useSensor(PointerSensor, {
+            activationConstraint: {
+              distance: 8,
+            },
+          }),
+          useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+          })
+        )}
+        collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <Accordion 
-          type="multiple" 
-          value={expandedItems}
-          onValueChange={handleAccordionChange}
-          className="w-full"
+        <SortableContext
+          items={paginatedMilestones.map(m => m.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext
-            items={filteredMilestones.map(m => m.id)}
-            strategy={verticalListSortingStrategy}
+          <Accordion
+            type="multiple"
+            value={Array.from(expandedMilestones)}
+            onValueChange={(value) => setExpandedMilestones(new Set(value))}
+            className="space-y-4"
           >
-            <AnimatePresence>
-              {filteredMilestones.map((milestone) => {
-                const daysUntilDue = milestone.dueDate ? calculateDaysUntilDue(milestone.dueDate) : null;
-                const isComplete = milestone.isComplete || isMilestoneComplete(milestone.deliverables);
-                const progress = calculateMilestoneProgress(milestone.deliverables);
-                const isHighlighted = highlightedMilestoneId === milestone.id;
-                
-                return (
-                  <motion.div
-                    key={milestone.id}
-                    layout
-                    transition={{ duration: 0.3 }}
-                  >
-                    <SortableMilestoneItem
-                      milestone={milestone}
-                      daysUntilDue={daysUntilDue}
-                      isComplete={isComplete}
-                      progress={progress}
-                      isHighlighted={isHighlighted}
-                      expandedItems={expandedItems}
-                      onAccordionChange={handleAccordionChange}
-                      onEdit={openMilestoneForm}
-                      onDelete={(id) => {
-                        setDeleteMilestoneId(id);
-                        setMilestoneFormOpen(true);
-                      }}
-                      onAddDeliverable={(id) => setAddingDeliverableToMilestoneId(id)}
-                      milestoneRef={(el) => (milestoneRefs.current[milestone.id] = el)}
-                    />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </SortableContext>
-        </Accordion>
-        
-        {/* Unassigned Deliverables Section */}
-        {unassignedDeliverables.length > 0 && (
-          <div className="mt-8 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Unassigned Deliverables</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setAddingDeliverableToMilestoneId("unassigned")}
-                className="flex items-center gap-1"
-              >
-                <Plus className="h-4 w-4" />
-                Add Deliverable
-              </Button>
-            </div>
-            
-            {addingDeliverableToMilestoneId === "unassigned" && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <AddDeliverableForm
-                  onSave={(newDeliverable) => {
-                    // Create a new milestone ID for unassigned deliverables
-                    const newId = Math.random().toString(36).substr(2, 9);
-                    setMilestones((prevMilestones) => [
-                      ...prevMilestones,
-                      {
-                        id: newId,
-                        title: "Unassigned",
-                        deliverables: [
-                          {
-                            id: Math.random().toString(36).substr(2, 9),
-                            projectId: projectId,
-                            name: newDeliverable.name,
-                            status: newDeliverable.status,
-                            dueDate: newDeliverable.dueDate || new Date().toISOString().split('T')[0],
-                            revisions: [],
-                            milestoneId: null,
-                          },
-                        ],
-                      },
-                    ]);
-                    setAddingDeliverableToMilestoneId(null);
-                  }}
-                  onCancel={() => setAddingDeliverableToMilestoneId(null)}
-                  milestones={milestones}
-                />
-              </motion.div>
-            )}
-            
-            <SortableContext
-              items={getFilteredDeliverables(unassignedDeliverables).map((d) => d.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <AnimatePresence>
-                {getFilteredDeliverables(unassignedDeliverables).length > 0 ? (
-                  getFilteredDeliverables(unassignedDeliverables).map((deliverable) => (
-                    <motion.div
-                      key={deliverable.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <SortableDeliverableCard
-                        deliverable={deliverable}
-                        isEditing={editingDeliverable?.id === deliverable.id}
-                        editingDeliverable={editingDeliverable}
-                        onStartEditing={handleStartEditing}
-                        onSaveEdit={handleSaveEdit}
-                        onCancelEdit={handleCancelEdit}
-                        onNameChange={handleNameChange}
-                        onStatusChange={handleStatusChange}
-                      />
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-muted-foreground">
-                    No unassigned deliverables match the current filters
-                  </div>
-                )}
-              </AnimatePresence>
-            </SortableContext>
-          </div>
-        )}
-        
-        <DragOverlay>
-          {activeDeliverable ? (
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {activeDeliverable.name}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(activeDeliverable.status)}
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(activeDeliverable.dueDate)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-muted-foreground">
-                  Status: {activeDeliverable.status}
-                </div>
-              </CardContent>
-            </Card>
-          ) : activeMilestoneId ? (
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {milestones.find(m => m.id === activeMilestoneId)?.title}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {milestones.find(m => m.id === activeMilestoneId)?.dueDate 
-                      ? formatDate(milestones.find(m => m.id === activeMilestoneId)?.dueDate || '')
-                      : 'No due date'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-muted-foreground">
-                  {milestones.find(m => m.id === activeMilestoneId)?.deliverables.length || 0} deliverables
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-        </DragOverlay>
+            {paginatedMilestones.map((milestone) => (
+              <SortableMilestoneItem
+                key={milestone.id}
+                milestone={milestone}
+                isExpanded={expandedMilestones.has(milestone.id)}
+                onToggle={() => {
+                  const newExpanded = new Set(expandedMilestones);
+                  if (newExpanded.has(milestone.id)) {
+                    newExpanded.delete(milestone.id);
+                  } else {
+                    newExpanded.add(milestone.id);
+                  }
+                  setExpandedMilestones(newExpanded);
+                }}
+                onEdit={() => handleEditMilestone(milestone)}
+                onDelete={() => handleDeleteMilestone(milestone.id)}
+                onAddDeliverable={() => setAddingDeliverableToMilestoneId(milestone.id)}
+                updateState={(updates) => handleUpdateMilestone(milestone.id, updates)}
+              />
+            ))}
+          </Accordion>
+        </SortableContext>
       </DndContext>
 
-      {/* Milestone Form Dialog */}
-      <MilestoneForm
-        open={milestoneFormOpen}
-        onOpenChange={setMilestoneFormOpen}
-        onSubmit={editingMilestone ? handleUpdateMilestone : handleCreateMilestone}
-        initialData={editingMilestone || undefined}
-        onDelete={deleteMilestoneId ? () => handleDeleteMilestone(deleteMilestoneId) : undefined}
+      {hasMoreMilestones && (
+        <div className="flex justify-center mt-4">
+          <Button 
+            variant="outline" 
+            onClick={loadMoreMilestones}
+            className="flex items-center gap-2"
+          >
+            Load More Milestones
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Add Deliverable Dialog */}
+      {addingDeliverableToMilestoneId && (
+        <Dialog open onOpenChange={() => setAddingDeliverableToMilestoneId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Deliverable</DialogTitle>
+            </DialogHeader>
+            {/* Deliverable form content */}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Deliverable Dialog */}
+      {editingDeliverable && (
+        <Dialog open onOpenChange={() => setEditingDeliverable(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Deliverable</DialogTitle>
+            </DialogHeader>
+            {/* Deliverable edit form content */}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={!!deletingDeliverable}
+        onClose={() => setDeletingDeliverable(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Deliverable"
+        description={`Are you sure you want to delete "${deletingDeliverable?.name}"? This action cannot be undone.`}
+        itemName={deletingDeliverable?.name || ""}
       />
     </div>
   );

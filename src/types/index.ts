@@ -11,19 +11,26 @@ export interface Project {
   status: ProjectStatus;
   startDate: string;
   endDate: string;
-  client: string;
-  clientName: string;
   budget: number;
-  milestones: Milestone[];
+  client: string;
+  teamMembers: {
+    id: string;
+    name: string;
+    email: string;
+    role: "admin" | "editor" | "viewer";
+    avatar?: string;
+    status: "active" | "pending";
+  }[];
   deliverables: Deliverable[];
-  team: string[];
-  notes: string;
-  revisionLimit: number;
-  revisionsUsed: number;
+  milestones: Milestone[];
+  invoices: Invoice[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Milestone {
   id: string;
+  projectId: string;
   title: string;
   dueDate?: string;
   description?: string;
@@ -121,6 +128,31 @@ export interface InvoiceLineItem {
 export interface Feedback {
   id: string;
   content: string;
-  createdAt: string;
   author: string;
+  createdAt: string;
+}
+
+export interface ExtendedFeedback extends Feedback {
+  authorDetails: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  attachments?: { name: string; url: string }[];
+  tags?: string[];
+}
+
+export interface ThreadedFeedback extends ExtendedFeedback {
+  parentId?: string;
+  replies?: ExtendedFeedback[];
+  isResolved?: boolean;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
+  avatar?: string;
+  status: 'active' | 'pending';
 }

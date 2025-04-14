@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Project, DeliverableStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toastSuccess, toastError, toastInfo } from "./ToastNotification";
 
 interface ProjectDeliverablesProps {
   project: Project;
@@ -58,6 +58,26 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
     }
   };
 
+  const handleStatusChange = (deliverableId: string, newStatus: DeliverableStatus) => {
+    toastSuccess("Status updated", `Deliverable status changed to ${newStatus}`);
+    
+    if (newStatus === "Approved") {
+      toastSuccess("Deliverable approved! 🎉", "This deliverable has been marked as approved.");
+    }
+  };
+
+  const handleAddFileLink = (deliverableId: string) => {
+    toastInfo("Add file link", "You can attach a file link to this deliverable");
+  };
+
+  const handleLogRevision = (deliverableId: string) => {
+    toastInfo("Log revision", "You can log a revision for this deliverable");
+  };
+
+  const handleDeleteDeliverable = (deliverableId: string, deliverableName: string) => {
+    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project`);
+  };
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-medium">Deliverables</h3>
@@ -88,16 +108,19 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAddFileLink(deliverable.id)}>
                           <LinkIcon className="h-4 w-4 mr-2" />
                           Add File Link
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleLogRevision(deliverable.id)}>
                           <RotateCcw className="h-4 w-4 mr-2" />
                           Log Revision
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-red-600">
+                        <DropdownMenuItem 
+                          className="text-red-600"
+                          onClick={() => handleDeleteDeliverable(deliverable.id, deliverable.name)}
+                        >
                           Delete Deliverable
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -119,7 +142,10 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
                         </div>
                       </div>
                       
-                      <Select defaultValue={deliverable.status}>
+                      <Select 
+                        defaultValue={deliverable.status}
+                        onValueChange={(value) => handleStatusChange(deliverable.id, value as DeliverableStatus)}
+                      >
                         <SelectTrigger className="w-[180px]">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -164,7 +190,10 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
           <FileCheck className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
           <h3 className="text-lg font-medium">No deliverables yet</h3>
           <p className="text-muted-foreground mb-4">Add deliverables to track your project progress.</p>
-          <Button className="bg-brand-purple hover:bg-brand-purple-dark">
+          <Button 
+            className="bg-brand-purple hover:bg-brand-purple-dark"
+            onClick={() => toastSuccess("Ready to add", "Click 'Add Deliverable' to create your first deliverable")}
+          >
             Add First Deliverable
           </Button>
         </div>

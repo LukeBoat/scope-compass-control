@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Project, Revision, Deliverable } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,7 @@ import {
   DialogFooter,
   DialogClose
 } from "@/components/ui/dialog";
+import { toastSuccess, toastWarning } from "./ToastNotification";
 
 interface ProjectRevisionsProps {
   project: Project;
@@ -57,8 +57,18 @@ export function ProjectRevisions({ project }: ProjectRevisionsProps) {
   };
 
   const handleAddRevision = () => {
-    // Here you would typically add the revision to the database
-    // For now, we'll just close the dialog
+    if (project.revisionsUsed >= project.revisionLimit) {
+      toastWarning(
+        "Revision limit exceeded", 
+        "This project has reached its revision limit. Consider discussing with the client."
+      );
+    } else {
+      toastSuccess(
+        "Revision added", 
+        `A new revision has been logged for this deliverable.`
+      );
+    }
+    
     setOpen(false);
     setSelectedDeliverable("");
     setRevisionNote("");

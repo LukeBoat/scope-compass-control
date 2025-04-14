@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Project, Deliverable } from "@/types";
 import {
@@ -17,6 +16,7 @@ import { X, Info, FileCheck, PlusCircle, RotateCcw } from "lucide-react";
 import { ProjectInfo } from "./ProjectInfo";
 import { ProjectRevisions } from "./ProjectRevisions";
 import { ProjectDeliverables } from "./ProjectDeliverables";
+import { toastSuccess } from "./ToastNotification";
 
 interface ProjectDrawerProps {
   project: Project | null;
@@ -40,6 +40,10 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
       default:
         return "bg-gray-100 text-gray-800";
     }
+  };
+
+  const handleAddDeliverable = () => {
+    toastSuccess("New deliverable added", "Your deliverable has been created successfully");
   };
 
   return (
@@ -124,6 +128,7 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
               {activeTab === "deliverables" && (
                 <Button 
                   className="bg-brand-purple hover:bg-brand-purple-dark"
+                  onClick={handleAddDeliverable}
                 >
                   <PlusCircle className="h-4 w-4 mr-2" />
                   Add Deliverable

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Project, DeliverableStatus, Deliverable } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,7 +90,7 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
     setLastDeletedDeliverable(deliverableToDelete);
     
     // Show toast with undo option
-    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project", {
+    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project`, {
       onUndo: handleUndoDelete,
       projectColor: "#ea384c" // Red for deletion
     });
@@ -97,7 +98,7 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
   
   const handleUndoDelete = () => {
     if (lastDeletedDeliverable) {
-      toastSuccess("Deletion undone", `"${lastDeletedDeliverable.name}" has been restored", {
+      toastSuccess("Deletion undone", `"${lastDeletedDeliverable.name}" has been restored`, {
         projectColor: "#9b87f5"
       });
       setLastDeletedDeliverable(null);

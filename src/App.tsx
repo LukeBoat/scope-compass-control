@@ -13,7 +13,18 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner position="top-right" closeButton richColors />
+      <Sonner 
+        position="top-right" 
+        closeButton 
+        richColors 
+        pauseWhenPageIsHidden
+        expand={true}
+        visibleToasts={3}
+        toastOptions={{
+          duration: 4000,
+          className: "group",
+        }}
+      />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />

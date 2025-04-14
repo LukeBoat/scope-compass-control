@@ -25,8 +25,8 @@ export function ProjectRevisions({ project }: ProjectRevisionsProps) {
   const [open, setOpen] = useState(false);
   const [selectedDeliverable, setSelectedDeliverable] = useState<string>("");
   const [revisionNote, setRevisionNote] = useState<string>("");
+  const [lastAddedRevision, setLastAddedRevision] = useState<{deliverableId: string, note: string} | null>(null);
 
-  // Get all revisions across all deliverables
   const getAllRevisions = () => {
     const allRevisions: Array<Revision & { deliverableName: string }> = [];
     
@@ -39,12 +39,11 @@ export function ProjectRevisions({ project }: ProjectRevisionsProps) {
       });
     });
     
-    // Sort by date (newest first)
     return allRevisions.sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   };
-  
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-US', { 
@@ -57,21 +56,46 @@ export function ProjectRevisions({ project }: ProjectRevisionsProps) {
   };
 
   const handleAddRevision = () => {
+    setLastAddedRevision({
+      deliverableId: selectedDeliverable,
+      note: revisionNote
+    });
+    
     if (project.revisionsUsed >= project.revisionLimit) {
       toastWarning(
         "Revision limit exceeded", 
-        "This project has reached its revision limit. Consider discussing with the client."
+        "This project has reached its revision limit. Consider discussing with the client.",
+        {
+          projectColor: "#f97316"
+        }
       );
     } else {
+      const deliverableName = project.deliverables.find(d => d.id === selectedDeliverable)?.name || "deliverable";
+      
       toastSuccess(
         "Revision added", 
-        `A new revision has been logged for this deliverable.`
+        `A new revision has been logged for "${deliverableName}".`,
+        {
+          onUndo: handleUndoAddRevision,
+          projectColor: "#9b87f5"
+        }
       );
     }
     
     setOpen(false);
     setSelectedDeliverable("");
     setRevisionNote("");
+  };
+
+  const handleUndoAddRevision = () => {
+    if (lastAddedRevision) {
+      const deliverableName = project.deliverables.find(d => d.id === lastAddedRevision.deliverableId)?.name || "deliverable";
+      
+      toastSuccess("Revision removed", `The revision for "${deliverableName}" has been removed`, {
+        projectColor: "#9b87f5"
+      });
+      setLastAddedRevision(null);
+    }
   };
 
   const allRevisions = getAllRevisions();

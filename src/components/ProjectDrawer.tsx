@@ -26,6 +26,7 @@ interface ProjectDrawerProps {
 
 export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
   const [activeTab, setActiveTab] = useState("info");
+  const [lastAddedDeliverable, setLastAddedDeliverable] = useState<boolean>(false);
 
   if (!project) return null;
 
@@ -43,7 +44,24 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
   };
 
   const handleAddDeliverable = () => {
-    toastSuccess("New deliverable added", "Your deliverable has been created successfully");
+    setLastAddedDeliverable(true);
+    toastSuccess(
+      "New deliverable added", 
+      "Your deliverable has been created successfully", 
+      {
+        onUndo: handleUndoAddDeliverable,
+        projectColor: "#9b87f5"
+      }
+    );
+  };
+  
+  const handleUndoAddDeliverable = () => {
+    if (lastAddedDeliverable) {
+      toastSuccess("Deliverable removed", "The new deliverable has been removed", {
+        projectColor: "#9b87f5"
+      });
+      setLastAddedDeliverable(false);
+    }
   };
 
   return (

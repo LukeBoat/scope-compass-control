@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Project, DeliverableStatus } from "@/types";
+import { Project, DeliverableStatus, Deliverable } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Select, 
@@ -32,6 +32,9 @@ interface ProjectDeliverablesProps {
 }
 
 export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
+  // Store the last deleted deliverable for undo functionality
+  const [lastDeletedDeliverable, setLastDeletedDeliverable] = useState<Deliverable | null>(null);
+  
   // Group deliverables by status
   const deliverablesByStatus = {
     "Not Started": project.deliverables.filter(d => d.status === "Not Started"),
@@ -59,7 +62,9 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
   };
 
   const handleStatusChange = (deliverableId: string, newStatus: DeliverableStatus) => {
-    toastSuccess("Status updated", `Deliverable status changed to ${newStatus}`);
+    toastSuccess("Status updated", `Deliverable status changed to ${newStatus}`, {
+      projectColor: "#9b87f5" // Project purple color
+    });
     
     if (newStatus === "Approved") {
       toastSuccess("Deliverable approved! 🎉", "This deliverable has been marked as approved.");
@@ -67,15 +72,36 @@ export function ProjectDeliverables({ project }: ProjectDeliverablesProps) {
   };
 
   const handleAddFileLink = (deliverableId: string) => {
-    toastInfo("Add file link", "You can attach a file link to this deliverable");
+    toastInfo("Add file link", "You can attach a file link to this deliverable", {
+      projectColor: "#9b87f5"
+    });
   };
 
   const handleLogRevision = (deliverableId: string) => {
-    toastInfo("Log revision", "You can log a revision for this deliverable");
+    toastInfo("Log revision", "You can log a revision for this deliverable", {
+      projectColor: "#9b87f5"
+    });
   };
 
   const handleDeleteDeliverable = (deliverableId: string, deliverableName: string) => {
-    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project`);
+    // Find the deliverable to store for potential undo
+    const deliverableToDelete = project.deliverables.find(d => d.id === deliverableId) || null;
+    setLastDeletedDeliverable(deliverableToDelete);
+    
+    // Show toast with undo option
+    toastError("Deliverable deleted", `"${deliverableName}" has been removed from this project", {
+      onUndo: handleUndoDelete,
+      projectColor: "#ea384c" // Red for deletion
+    });
+  };
+  
+  const handleUndoDelete = () => {
+    if (lastDeletedDeliverable) {
+      toastSuccess("Deletion undone", `"${lastDeletedDeliverable.name}" has been restored", {
+        projectColor: "#9b87f5"
+      });
+      setLastDeletedDeliverable(null);
+    }
   };
 
   return (

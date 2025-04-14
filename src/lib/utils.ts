@@ -15,3 +15,10 @@ export function calculateProgress(project: Project): number {
   
   return Math.round((completedDeliverables / project.deliverables.length) * 100);
 }
+
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}

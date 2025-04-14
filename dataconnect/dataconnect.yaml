@@ -1,0 +1,12 @@
+specVersion: "v1"
+serviceId: "scope-compass-control"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "scope-compass-control-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]

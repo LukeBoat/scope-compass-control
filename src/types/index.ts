@@ -1,5 +1,5 @@
 export type ProjectStatus = "Not Started" | "Active" | "In Progress" | "On Hold" | "Completed" | "Cancelled";
-export type DeliverableStatus = "Not Started" | "In Progress" | "Delivered" | "Approved" | "Pending Feedback" | "Changes Requested";
+export type DeliverableStatus = "Not Started" | "In Progress" | "Delivered" | "Approved" | "Rejected" | "In Review";
 export type MilestoneVisibility = "Internal" | "Client" | "Public";
 export type ScopeChangeType = "Addition" | "Removal" | "Update";
 export type InvoiceStatus = "Draft" | "Sent" | "Paid" | "Overdue";
@@ -49,17 +49,17 @@ export interface Deliverable {
   id: string;
   projectId: string;
   name: string;
-  status: "Not Started" | "In Progress" | "Delivered" | "Approved";
-  dueDate?: string;
-  notes?: string;
-  fileUrl?: string;
-  revisions: Revision[];
-  milestoneId?: string | null;
+  status: DeliverableStatus;
+  dueDate: string;
+  notes: string;
+  milestoneId: string;
   isApproved: boolean;
-  approvedAt?: string;
-  approvedBy?: string;
-  approvedComment?: string;
-  feedback: DeliverableFeedback[];
+  revisions: Revision[];
+  feedback: Feedback[];
+  title?: string;
+  description?: string;
+  assignedTo?: string;
+  visibility?: MilestoneVisibility;
 }
 
 export interface DeliverableFeedback {
@@ -116,4 +116,11 @@ export interface InvoiceLineItem {
   description?: string;
   quantity?: number;
   unitPrice?: number;
+}
+
+export interface Feedback {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: string;
 }

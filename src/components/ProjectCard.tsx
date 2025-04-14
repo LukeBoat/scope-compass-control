@@ -1,123 +1,68 @@
-import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Project } from "@/types";
+import { Project, DeliverableStatus } from "@/types";
 import { calculateProgress } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarIcon, UserIcon, ClockIcon } from "lucide-react";
 
 interface ProjectCardProps {
   project: Project;
-  index?: number;
 }
 
-const statusIcons = {
-  "Not Started": "⚪",
-  "In Progress": "🟡",
-  "On Hold": "🟠",
-  "Completed": "🟢",
-  "Cancelled": "🔴"
-};
-
-const statusColors = {
-  "Not Started": "bg-muted text-muted-foreground",
-  "In Progress": "bg-brand-status-info/10 text-brand-status-info",
-  "On Hold": "bg-brand-status-warning/10 text-brand-status-warning",
-  "Completed": "bg-brand-status-success/10 text-brand-status-success",
-  "Cancelled": "bg-brand-status-error/10 text-brand-status-error"
-};
-
-export function ProjectCard({ project, index = 0 }: ProjectCardProps) {
+export function ProjectCard({ project }: ProjectCardProps) {
   const progress = calculateProgress(project);
-  
+
   return (
-    <TooltipProvider>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ 
-          duration: 0.3,
-          delay: index * 0.1,
-          ease: [0.4, 0, 0.2, 1]
-        }}
-        whileHover={{ 
-          scale: 1.02,
-          transition: { duration: 0.2 }
-        }}
-      >
-        <Link to={`/projects/${project.id}`}>
-          <Card className="group h-full transition-all duration-200 hover:border-primary/20 hover:shadow-lg dark:border-border/50 dark:hover:border-primary/30">
-            <CardHeader className="space-y-2">
-              <div className="flex items-start justify-between">
-                <CardTitle className="line-clamp-1 text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                  {project.name}
-                </CardTitle>
-                <Badge 
-                  variant="outline" 
-                  className={`${statusColors[project.status as keyof typeof statusColors]} transition-colors`}
-                >
-                  {statusIcons[project.status as keyof typeof statusIcons]} {project.status}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground line-clamp-2 group-hover:text-foreground/80 transition-colors">
-                {project.description}
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="font-medium text-primary">
-                        {progress}%
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Project completion</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <Progress 
-                  value={progress} 
-                  className="h-2 bg-muted dark:bg-muted/50" 
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Client</span>
-                  <p className="font-medium text-foreground">{project.client}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Due Date</span>
-                  <p className="font-medium text-foreground">
-                    {new Date(project.endDate).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex items-center justify-between border-t pt-4 dark:border-border/50">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-muted-foreground">
-                  {project.milestones?.length || 0} Milestones
-                </span>
-                <span className="text-sm text-muted-foreground">•</span>
-                <span className="text-sm text-muted-foreground">
-                  {project.deliverables?.length || 0} Deliverables
-                </span>
-              </div>
-              <motion.div
-                whileHover={{ x: 4 }}
-                transition={{ duration: 0.2 }}
-                className="text-primary font-medium"
-              >
-                View Details →
-              </motion.div>
-            </CardFooter>
-          </Card>
-        </Link>
-      </motion.div>
-    </TooltipProvider>
+    <Link 
+      to={`/projects/${project.id}`}
+      className="block p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md hover:border-brand-blue transition-all duration-200 group"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-brand-blue transition-colors">
+            {project.name}
+          </h3>
+          <div className="flex items-center gap-2 mt-1">
+            <UserIcon className="h-4 w-4 text-gray-400" />
+            <span className="text-sm text-gray-600 font-medium">
+              {project.clientName}
+            </span>
+          </div>
+        </div>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+          project.status === "Completed" ? "bg-green-100 text-green-800" :
+          project.status === "In Progress" ? "bg-blue-100 text-blue-800" :
+          project.status === "On Hold" ? "bg-yellow-100 text-yellow-800" :
+          "bg-gray-100 text-gray-800"
+        }`}>
+          {project.status}
+        </span>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <CalendarIcon className="h-4 w-4" />
+          <span>Due: {new Date(project.endDate).toLocaleDateString()}</span>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Progress</span>
+            <span className="font-medium text-gray-900">{progress}%</span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-brand-blue transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <ClockIcon className="h-4 w-4" />
+          <span>
+            {project.deliverables.filter(d => d.status === "Approved").length} of {project.deliverables.length} deliverables completed
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }

@@ -170,8 +170,7 @@ const Index = () => {
                 {filteredProjects.map(project => (
                   <ProjectCard 
                     key={project.id} 
-                    project={project} 
-                    onClick={handleProjectClick} 
+                    project={project}
                   />
                 ))}
               </div>

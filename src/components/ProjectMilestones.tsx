@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useId, useRef } from "react";
-import { Deliverable, DeliverableStatus, Milestone, MilestoneComment, MilestoneVisibility } from "@/types";
+import { Deliverable, DeliverableStatus, Milestone, MilestoneVisibility } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Accordion,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, CheckCircle2, Circle, Clock, Check, X, GripVertical, Plus, ChevronDown, ChevronUp, Search, Loader2, Pencil, Trash2, MessageSquare, Eye, Unlock, Lock } from "lucide-react";
+import { Calendar, CheckCircle2, Circle, Clock, Check, X, GripVertical, Plus, ChevronDown, ChevronUp, Search, Loader2, Pencil, Trash2, MessageSquare, Eye, Unlock, Lock, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -61,6 +61,10 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useDeliverables } from "@/hooks/useDeliverables";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 interface MilestoneProps {
   projectId: string;
@@ -79,7 +83,7 @@ interface NewDeliverable {
   milestoneId: string | null;
 }
 
-interface MilestoneComment {
+interface MilestoneCommentType {
   id: string;
   milestoneId: string;
   userId: string;
@@ -93,50 +97,58 @@ interface MilestoneComment {
 const mockMilestones: Milestone[] = [
   {
     id: "1",
-    title: "Phase 1: Design",
-    dueDate: "2024-05-01",
+    title: "Phase 1: Planning",
+    dueDate: "2024-03-01",
+    description: "Initial planning and requirements gathering",
     deliverables: [
       {
         id: "1",
-        projectId: "1",
-        name: "Wireframes",
-        status: "In Progress",
-        dueDate: "2024-04-15",
-        revisions: [],
+        title: "Project Charter",
+        status: "Approved",
+        dueDate: "2024-02-15",
+        description: "Project charter document",
+        assignedTo: "John Doe",
+        visibility: "Internal"
       },
       {
         id: "2",
-        projectId: "1",
-        name: "UI/UX Design",
-        status: "Not Started",
-        dueDate: "2024-04-30",
-        revisions: [],
-      },
+        title: "Requirements Document",
+        status: "Delivered",
+        dueDate: "2024-02-28",
+        description: "Detailed requirements specification",
+        assignedTo: "Jane Smith",
+        visibility: "Client"
+      }
     ],
+    visibility: "Internal"
   },
   {
     id: "2",
     title: "Phase 2: Development",
-    dueDate: "2024-06-01",
+    dueDate: "2024-04-01",
+    description: "Core development phase",
     deliverables: [
       {
         id: "3",
-        projectId: "1",
-        name: "Frontend Implementation",
-        status: "Not Started",
-        dueDate: "2024-05-15",
-        revisions: [],
+        title: "Frontend Development",
+        status: "In Progress",
+        dueDate: "2024-03-15",
+        description: "Frontend implementation",
+        assignedTo: "Alice Johnson",
+        visibility: "Internal"
       },
       {
         id: "4",
-        projectId: "1",
-        name: "Backend Integration",
+        title: "Backend Development",
         status: "Not Started",
-        dueDate: "2024-05-30",
-        revisions: [],
-      },
+        dueDate: "2024-03-30",
+        description: "Backend implementation",
+        assignedTo: "Bob Wilson",
+        visibility: "Internal"
+      }
     ],
-  },
+    visibility: "Internal"
+  }
 ];
 
 interface SortableDeliverableCardProps {
@@ -403,7 +415,7 @@ const isMilestoneComplete = (deliverables: Deliverable[]) => {
 
 interface MilestoneCommentsProps {
   milestoneId: string;
-  comments: MilestoneComment[];
+  comments: MilestoneCommentType[];
   onAddComment: (milestoneId: string, content: string) => void;
 }
 
@@ -859,7 +871,7 @@ function SortableMilestoneItem({
               Add Deliverable
             </Button>
           </div>
-          {addingToMilestoneId === milestone.id && (
+          {addingDeliverableToMilestoneId === milestone.id && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -869,9 +881,9 @@ function SortableMilestoneItem({
               <AddDeliverableForm
                 onSave={(newDeliverable) => {
                   handleAddDeliverable(milestone.id, newDeliverable);
-                  setAddingToMilestoneId(null);
+                  setAddingDeliverableToMilestoneId(null);
                 }}
-                onCancel={() => setAddingToMilestoneId(null)}
+                onCancel={() => setAddingDeliverableToMilestoneId(null)}
                 milestones={milestones}
                 currentMilestoneId={milestone.id}
               />
@@ -917,31 +929,32 @@ function SortableMilestoneItem({
 }
 
 export function ProjectMilestones({ projectId }: MilestoneProps) {
-  const { milestones: fetchedMilestones, loading, error } = useMilestones(projectId);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const { milestones, loading, error } = useMilestones(projectId);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingDeliverable, setEditingDeliverable] = useState<EditingDeliverable | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [addingToMilestoneId, setAddingToMilestoneId] = useState<string | null>(null);
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<DeliverableStatus | "All">("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [draggedMilestone, setDraggedMilestone] = useState<Milestone | null>(null);
+  const [isCreateMilestoneOpen, setIsCreateMilestoneOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [addingDeliverableToMilestoneId, setAddingDeliverableToMilestoneId] = useState<string | null>(null);
   const [newMilestoneId, setNewMilestoneId] = useState<string | null>(null);
   const [highlightedMilestoneId, setHighlightedMilestoneId] = useState<string | null>(null);
   const milestoneRefs = useRef<Record<string, HTMLDivElement | null>>({});
   
   // New state for milestone form
   const [milestoneFormOpen, setMilestoneFormOpen] = useState(false);
-  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<"client" | "internal">("internal"); // For testing
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const { deliverables, addDeliverable, updateDeliverable } = useDeliverables(projectId);
 
   // Update local state when fetched data changes
   useEffect(() => {
-    if (fetchedMilestones.length > 0) {
-      setMilestones(fetchedMilestones);
+    if (milestones.length > 0) {
+      setMilestones(milestones);
     }
-  }, [fetchedMilestones]);
+  }, [milestones]);
 
   // Show error toast if there's an error
   useEffect(() => {
@@ -982,20 +995,6 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
       return matchesStatus && matchesSearch;
     });
   };
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 300,
-        tolerance: 8,
-      },
-    })
-  );
 
   const calculateMilestoneProgress = (deliverables: Deliverable[]) => {
     const completed = deliverables.filter(
@@ -1055,132 +1054,60 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    
-    // Check if we're dragging a milestone or a deliverable
-    const isMilestone = milestones.some(m => m.id === active.id);
-    
-    if (isMilestone) {
-      setActiveMilestoneId(active.id as string);
+    setActiveId(active.id as string);
+    const milestone = milestones.find(m => m.id === active.id);
+    if (milestone) {
+      setDraggedMilestone(milestone);
+    }
+  };
+
+  const handleDragEnd = (result: any) => {
+    if (!result.destination) return;
+
+    const sourceIndex = result.source.index;
+    const destIndex = result.destination.index;
+    const sourceDroppableId = result.source.droppableId;
+    const destDroppableId = result.destination.droppableId;
+
+    // Handle reordering within the same milestone
+    if (sourceDroppableId === destDroppableId) {
+      const milestone = milestones.find(m => m.id === sourceDroppableId);
+      if (!milestone) return;
+
+      const newDeliverables = Array.from(deliverables.filter(d => d.milestoneId === milestone.id));
+      const [removed] = newDeliverables.splice(sourceIndex, 1);
+      newDeliverables.splice(destIndex, 0, removed);
+
+      // Update milestone with new deliverable order
+      updateMilestone({
+        ...milestone,
+        deliverableIds: newDeliverables.map(d => d.id)
+      });
     } else {
-      setActiveId(active.id as string);
+      // Handle moving between milestones
+      const deliverable = deliverables.find(d => d.id === result.draggableId);
+      if (!deliverable) return;
+
+      updateDeliverable({
+        ...deliverable,
+        milestoneId: destDroppableId
+      });
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (!over) {
-      setActiveId(null);
-      setActiveMilestoneId(null);
-      return;
-    }
-    
-    // Check if we're reordering milestones or deliverables
-    const isMilestone = milestones.some(m => m.id === active.id);
-    
-    if (isMilestone && active.id !== over.id) {
-      // Reordering milestones
-      const oldIndex = milestones.findIndex(m => m.id === active.id);
-      const newIndex = milestones.findIndex(m => m.id === over.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const reorderedMilestones = arrayMove(milestones, oldIndex, newIndex);
-        
-        // Update order property for each milestone
-        const updatedMilestones = reorderedMilestones.map((milestone, index) => ({
-          ...milestone,
-          order: index,
-        }));
-        
-        setMilestones(updatedMilestones);
-        
-        // Persist the new order to Firestore
-        updateMilestoneOrder(updatedMilestones);
-        
-        // Show success toast
-        toastSuccess("Milestone order updated");
-      }
-    } else if (!isMilestone && active.id !== over.id) {
-      // Reordering deliverables (existing code)
-      setMilestones((prevMilestones) =>
-        prevMilestones.map((milestone) => {
-          const oldIndex = milestone.deliverables.findIndex(
-            (d) => d.id === active.id
-          );
-          const newIndex = milestone.deliverables.findIndex(
-            (d) => d.id === over.id
-          );
-
-          if (oldIndex !== -1 && newIndex !== -1) {
-            return {
-              ...milestone,
-              deliverables: arrayMove(
-                milestone.deliverables,
-                oldIndex,
-                newIndex
-              ),
-            };
-          }
-          return milestone;
-        })
-      );
-    }
-    
-    setActiveId(null);
-    setActiveMilestoneId(null);
-  };
-
-  // Function to update milestone order in Firestore
-  const updateMilestoneOrder = async (updatedMilestones: Milestone[]) => {
-    try {
-      // This is a placeholder for the actual Firestore update
-      // Replace with your actual Firestore update logic
-      console.log("Updating milestone order in Firestore", updatedMilestones);
-      
-      // Example implementation:
-      // const batch = writeBatch(db);
-      // updatedMilestones.forEach(milestone => {
-      //   const milestoneRef = doc(db, 'projects', projectId, 'milestones', milestone.id);
-      //   batch.update(milestoneRef, { order: milestone.order });
-      // });
-      // await batch.commit();
-    } catch (error) {
-      console.error("Error updating milestone order:", error);
-      toastError("Failed to update milestone order");
-    }
-  };
-
-  const activeDeliverable = activeId
-    ? milestones
-        .flatMap((m) => m.deliverables)
-        .find((d) => d.id === activeId)
-    : null;
-
-  const handleAddDeliverable = (milestoneId: string, newDeliverable: NewDeliverable) => {
-    setMilestones((prevMilestones) =>
-      prevMilestones.map((milestone) => {
-        if (milestone.id === milestoneId) {
-          const newId = Math.random().toString(36).substr(2, 9);
-          return {
-            ...milestone,
-            deliverables: [
-              ...milestone.deliverables,
-              {
-                id: newId,
-                projectId: milestone.id,
-                name: newDeliverable.name,
-                status: newDeliverable.status,
-                dueDate: newDeliverable.dueDate || new Date().toISOString().split('T')[0],
-                revisions: [],
-                milestoneId: newDeliverable.milestoneId || milestoneId,
-              },
-            ],
-          };
-        }
-        return milestone;
-      })
-    );
-    setAddingToMilestoneId(null);
+  const handleAddDeliverable = (milestoneId: string, name: string) => {
+    addDeliverable({
+      id: crypto.randomUUID(),
+      projectId,
+      milestoneId,
+      name,
+      status: "Not Started",
+      dueDate: new Date().toISOString(),
+      isApproved: false,
+      revisions: [],
+      feedback: []
+    });
+    setAddingDeliverableToMilestoneId(null);
   };
 
   const handleExpandAll = () => {
@@ -1263,7 +1190,7 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
   };
 
   const handleAddComment = (milestoneId: string, content: string) => {
-    const newComment: MilestoneComment = {
+    const newComment: MilestoneCommentType = {
       id: useId(),
       milestoneId,
       userId: "current-user-id", // This should come from your auth context
@@ -1310,88 +1237,6 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
   }, [milestones, searchQuery, userRole]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground">Loading milestones...</p>
-      </div>
-    );
-  }
-
-  if (milestones.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-6">
-        <div className="flex flex-col items-center justify-center space-y-4">
-          <motion.div 
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-24 h-24 mb-4"
-          >
-            <svg 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-full text-brand-purple"
-            >
-              <path 
-                d="M12 2L2 7L12 12L22 7L12 2Z" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-              <path 
-                d="M2 17L12 22L22 17" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-              <path 
-                d="M2 12L12 17L22 12" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
-          <motion.h3 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            className="text-xl font-medium"
-          >
-            No milestones yet
-          </motion.h3>
-          <motion.p 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
-            className="text-muted-foreground text-center max-w-md"
-          >
-            Start by creating your first milestone to track your project's progress
-          </motion.p>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-        >
-          <Button 
-            onClick={() => openMilestoneForm()} 
-            className="bg-brand-purple hover:bg-brand-purple/90"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create First Milestone
-          </Button>
-        </motion.div>
-      </div>
-    );
-  }
 
   // Calculate overall project progress
   const overallProgress = useMemo(() => {
@@ -1522,7 +1367,7 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
                         setDeleteMilestoneId(id);
                         setMilestoneFormOpen(true);
                       }}
-                      onAddDeliverable={(id) => setAddingToMilestoneId(id)}
+                      onAddDeliverable={(id) => setAddingDeliverableToMilestoneId(id)}
                       milestoneRef={(el) => (milestoneRefs.current[milestone.id] = el)}
                     />
                   </motion.div>
@@ -1540,7 +1385,7 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAddingToMilestoneId("unassigned")}
+                onClick={() => setAddingDeliverableToMilestoneId("unassigned")}
                 className="flex items-center gap-1"
               >
                 <Plus className="h-4 w-4" />
@@ -1548,7 +1393,7 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
               </Button>
             </div>
             
-            {addingToMilestoneId === "unassigned" && (
+            {addingDeliverableToMilestoneId === "unassigned" && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1577,9 +1422,9 @@ export function ProjectMilestones({ projectId }: MilestoneProps) {
                         ],
                       },
                     ]);
-                    setAddingToMilestoneId(null);
+                    setAddingDeliverableToMilestoneId(null);
                   }}
-                  onCancel={() => setAddingToMilestoneId(null)}
+                  onCancel={() => setAddingDeliverableToMilestoneId(null)}
                   milestones={milestones}
                 />
               </motion.div>

@@ -1,84 +1,123 @@
-
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Project } from "@/types";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { calculateProgress } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Clock, FileText, CheckCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProjectCardProps {
   project: Project;
-  onClick: (project: Project) => void;
+  index?: number;
 }
 
-export function ProjectCard({ project, onClick }: ProjectCardProps) {
-  // Calculate how many deliverables are completed
-  const totalDeliverables = project.deliverables.length;
-  const completedDeliverables = project.deliverables.filter(
-    d => d.status === "Approved"
-  ).length;
+const statusIcons = {
+  "Not Started": "⚪",
+  "In Progress": "🟡",
+  "On Hold": "🟠",
+  "Completed": "🟢",
+  "Cancelled": "🔴"
+};
+
+const statusColors = {
+  "Not Started": "bg-muted text-muted-foreground",
+  "In Progress": "bg-brand-status-info/10 text-brand-status-info",
+  "On Hold": "bg-brand-status-warning/10 text-brand-status-warning",
+  "Completed": "bg-brand-status-success/10 text-brand-status-success",
+  "Cancelled": "bg-brand-status-error/10 text-brand-status-error"
+};
+
+export function ProjectCard({ project, index = 0 }: ProjectCardProps) {
+  const progress = calculateProgress(project);
   
-  // Calculate progress percentage based on approved deliverables
-  const progressPercentage = totalDeliverables > 0 
-    ? Math.round((completedDeliverables / totalDeliverables) * 100)
-    : 0;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 hover:bg-green-200";
-      case "On Hold":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
-      case "Completed":
-        return "bg-blue-100 text-blue-800 hover:bg-blue-200";
-      default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200";
-    }
-  };
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
-  };
-
   return (
-    <Card 
-      className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer animate-fade-in"
-      onClick={() => onClick(project)}
-    >
-      <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-lg">{project.name}</h3>
-          <p className="text-sm text-muted-foreground">{project.clientName}</p>
-        </div>
-        <Badge className={`${getStatusColor(project.status)}`}>
-          {project.status}
-        </Badge>
-      </CardHeader>
-      <CardContent className="p-4 pt-2 pb-2">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <CheckCircle className="h-4 w-4" />
-            <span>{completedDeliverables} of {totalDeliverables} deliverables</span>
-          </div>
-          <span className="text-sm font-medium">{progressPercentage}%</span>
-        </div>
-        <Progress
-          value={progressPercentage}
-          className="h-2 bg-gray-100"
-          indicatorClassName={`${progressPercentage === 100 ? "bg-green-500" : "bg-brand-purple-light"}`}
-        />
-      </CardContent>
-      <CardFooter className="p-4 pt-2 border-t flex items-center justify-between">
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          <span>Due {formatDate(project.endDate)}</span>
-        </div>
-        <div className="text-sm">
-          <span className="font-medium">{project.revisionsUsed}</span>
-          <span className="text-muted-foreground">/{project.revisionLimit} revisions</span>
-        </div>
-      </CardFooter>
-    </Card>
+    <TooltipProvider>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ 
+          duration: 0.3,
+          delay: index * 0.1,
+          ease: [0.4, 0, 0.2, 1]
+        }}
+        whileHover={{ 
+          scale: 1.02,
+          transition: { duration: 0.2 }
+        }}
+      >
+        <Link to={`/projects/${project.id}`}>
+          <Card className="group h-full transition-all duration-200 hover:border-primary/20 hover:shadow-lg dark:border-border/50 dark:hover:border-primary/30">
+            <CardHeader className="space-y-2">
+              <div className="flex items-start justify-between">
+                <CardTitle className="line-clamp-1 text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                  {project.name}
+                </CardTitle>
+                <Badge 
+                  variant="outline" 
+                  className={`${statusColors[project.status as keyof typeof statusColors]} transition-colors`}
+                >
+                  {statusIcons[project.status as keyof typeof statusIcons]} {project.status}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground line-clamp-2 group-hover:text-foreground/80 transition-colors">
+                {project.description}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Progress</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="font-medium text-primary">
+                        {progress}%
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Project completion</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Progress 
+                  value={progress} 
+                  className="h-2 bg-muted dark:bg-muted/50" 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Client</span>
+                  <p className="font-medium text-foreground">{project.client}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Due Date</span>
+                  <p className="font-medium text-foreground">
+                    {new Date(project.endDate).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex items-center justify-between border-t pt-4 dark:border-border/50">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">
+                  {project.milestones?.length || 0} Milestones
+                </span>
+                <span className="text-sm text-muted-foreground">•</span>
+                <span className="text-sm text-muted-foreground">
+                  {project.deliverables?.length || 0} Deliverables
+                </span>
+              </div>
+              <motion.div
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
+                className="text-primary font-medium"
+              >
+                View Details →
+              </motion.div>
+            </CardFooter>
+          </Card>
+        </Link>
+      </motion.div>
+    </TooltipProvider>
   );
 }

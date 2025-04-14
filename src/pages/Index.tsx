@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, ProjectStatus } from "@/types";
 import { mockProjects } from "@/data/mockData";
@@ -8,6 +7,10 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectDrawer } from "@/components/ProjectDrawer";
 import { ProjectSkeleton } from "@/components/ProjectSkeleton";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, FolderPlus, Filter } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +23,12 @@ const Index = () => {
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [sortBy, setSortBy] = useState<"date" | "progress">("date");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newProject, setNewProject] = useState({
+    name: "",
+    clientName: "",
+    description: "",
+  });
 
   useEffect(() => {
     // Simulate loading data
@@ -55,7 +64,14 @@ const Index = () => {
       if (sortBy === "date") {
         return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
       } else {
-        return b.progress - a.progress;
+        // Calculate progress based on approved deliverables
+        const getProgress = (project: Project) => {
+          const total = project.deliverables.length;
+          if (total === 0) return 0;
+          const completed = project.deliverables.filter(d => d.status === "Approved").length;
+          return (completed / total) * 100;
+        };
+        return getProgress(b) - getProgress(a);
       }
     });
     
@@ -84,7 +100,37 @@ const Index = () => {
   };
 
   const handleAddProject = () => {
-    toast.info("Create Project", "This would open a form to create a new project");
+    setShowCreateDialog(true);
+  };
+
+  const handleCreateProject = () => {
+    if (!newProject.name || !newProject.clientName) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const project: Project = {
+      id: `proj_${Date.now()}`,
+      name: newProject.name,
+      description: newProject.description,
+      status: "Active" as ProjectStatus,
+      startDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      client: newProject.clientName,
+      clientName: newProject.clientName,
+      budget: 0,
+      milestones: [],
+      deliverables: [],
+      team: [],
+      notes: "",
+      revisionLimit: 3,
+      revisionsUsed: 0
+    };
+
+    setProjects(prev => [project, ...prev]);
+    setShowCreateDialog(false);
+    setNewProject({ name: "", clientName: "", description: "" });
+    toast.success("Project created successfully");
   };
 
   return (
@@ -185,6 +231,54 @@ const Index = () => {
           onClose={handleDrawerClose}
         />
       )}
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Add a new project to start tracking deliverables and revisions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Project Name</Label>
+              <Input
+                id="project-name"
+                placeholder="Enter project name"
+                value={newProject.name}
+                onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-name">Client Name</Label>
+              <Input
+                id="client-name"
+                placeholder="Enter client name"
+                value={newProject.clientName}
+                onChange={(e) => setNewProject(prev => ({ ...prev, clientName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Enter project description"
+                value={newProject.description}
+                onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateProject}>
+              Create Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

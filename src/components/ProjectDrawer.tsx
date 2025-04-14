@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Project, Deliverable } from "@/types";
+import { Project, Deliverable, DeliverableStatus } from "@/types";
 import {
   Drawer,
   DrawerClose,
@@ -12,11 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { X, Info, FileCheck, PlusCircle, RotateCcw } from "lucide-react";
+import { X, Info, FileCheck, PlusCircle, RotateCcw, Receipt } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ProjectInfo } from "./ProjectInfo";
 import { ProjectRevisions } from "./ProjectRevisions";
 import { ProjectDeliverables } from "./ProjectDeliverables";
 import { toastSuccess } from "./ToastNotification";
+import { Link } from "react-router-dom";
 
 interface ProjectDrawerProps {
   project: Project | null;
@@ -26,7 +31,12 @@ interface ProjectDrawerProps {
 
 export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
   const [activeTab, setActiveTab] = useState("info");
-  const [lastAddedDeliverable, setLastAddedDeliverable] = useState<boolean>(false);
+  const [showAddDeliverableDialog, setShowAddDeliverableDialog] = useState(false);
+  const [newDeliverable, setNewDeliverable] = useState({
+    name: "",
+    description: "",
+    dueDate: ""
+  });
 
   if (!project) return null;
 
@@ -44,23 +54,60 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
   };
 
   const handleAddDeliverable = () => {
-    setLastAddedDeliverable(true);
+    setShowAddDeliverableDialog(true);
+  };
+
+  const handleCreateDeliverable = () => {
+    if (!newDeliverable.name) {
+      toastSuccess("Error", "Deliverable name is required", {
+        projectColor: "#9b87f5"
+      });
+      return;
+    }
+
+    const deliverable: Deliverable = {
+      id: `del_${Date.now()}`,
+      projectId: project.id,
+      name: newDeliverable.name,
+      status: "Not Started",
+      dueDate: newDeliverable.dueDate || undefined,
+      notes: newDeliverable.description,
+      revisions: [],
+      isApproved: false,
+      feedback: []
+    };
+
+    // Here you would typically update the project with the new deliverable
+    // For now, we'll just show a success message
+    setShowAddDeliverableDialog(false);
+    setNewDeliverable({ name: "", description: "", dueDate: "" });
     toastSuccess(
       "New deliverable added", 
       "Your deliverable has been created successfully", 
       {
-        onUndo: handleUndoAddDeliverable,
         projectColor: "#9b87f5"
       }
     );
   };
-  
-  const handleUndoAddDeliverable = () => {
-    if (lastAddedDeliverable) {
-      toastSuccess("Deliverable removed", "The new deliverable has been removed", {
-        projectColor: "#9b87f5"
-      });
-      setLastAddedDeliverable(false);
+
+  const calculateProgress = (project: Project) => {
+    if (!project.deliverables?.length) return 0;
+    const completed = project.deliverables.filter(d => d.status === 'Approved').length;
+    return Math.round((completed / project.deliverables.length) * 100);
+  };
+
+  const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'default';
+      case 'completed':
+        return 'secondary';
+      case 'on hold':
+        return 'outline';
+      case 'cancelled':
+        return 'destructive';
+      default:
+        return 'default';
     }
   };
 
@@ -84,14 +131,22 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
           </DrawerHeader>
           
           <div className="px-6 pb-3">
-            <p className="text-muted-foreground">{project.clientName}</p>
-            <div className="flex items-center gap-3 mt-3">
-              <Progress 
-                value={project.progress} 
-                className="h-2 w-60 bg-gray-100" 
-                indicatorClassName="bg-brand-purple"
-              />
-              <span className="text-sm font-medium">{project.progress}% complete</span>
+            <p className="text-muted-foreground">{project.client}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-semibold">{project.name}</h2>
+                <p className="text-muted-foreground">{project.client}</p>
+              </div>
+              <Badge variant={getStatusBadgeVariant(project.status)}>
+                {project.status}
+              </Badge>
+            </div>
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Progress</span>
+                <span className="font-medium">{calculateProgress(project)}%</span>
+              </div>
+              <Progress value={calculateProgress(project)} className="h-2" />
             </div>
           </div>
 
@@ -119,6 +174,13 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
                   <FileCheck className="h-4 w-4 mr-2" />
                   Deliverables
                 </TabsTrigger>
+                <Link 
+                  to={`/projects/${project.id}/invoices`}
+                  className="h-12 px-0 font-medium flex items-center hover:text-brand-purple transition-colors"
+                >
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Invoices
+                </Link>
               </TabsList>
             </div>
             
@@ -156,6 +218,54 @@ export function ProjectDrawer({ project, open, onClose }: ProjectDrawerProps) {
           </DrawerFooter>
         </div>
       </DrawerContent>
+
+      <Dialog open={showAddDeliverableDialog} onOpenChange={setShowAddDeliverableDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Deliverable</DialogTitle>
+            <DialogDescription>
+              Create a new deliverable for this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="deliverable-name">Deliverable Name</Label>
+              <Input
+                id="deliverable-name"
+                placeholder="Enter deliverable name"
+                value={newDeliverable.name}
+                onChange={(e) => setNewDeliverable(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="due-date">Due Date</Label>
+              <Input
+                id="due-date"
+                type="date"
+                value={newDeliverable.dueDate}
+                onChange={(e) => setNewDeliverable(prev => ({ ...prev, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Enter deliverable description"
+                value={newDeliverable.description}
+                onChange={(e) => setNewDeliverable(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddDeliverableDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateDeliverable}>
+              Create Deliverable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Drawer>
   );
 }

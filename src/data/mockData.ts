@@ -1,18 +1,35 @@
-
-import { Project } from "@/types";
+import { Project, ProjectStatus } from "@/types";
 
 export const mockProjects: Project[] = [
   {
     id: "1",
     name: "Website Redesign",
-    clientName: "Acme Corp",
     description: "Complete redesign of company website with new branding and improved UX",
-    status: "Active",
+    status: "In Progress" as ProjectStatus,
     startDate: "2025-03-01",
     endDate: "2025-05-15",
-    revisionLimit: 3,
-    revisionsUsed: 2,
-    progress: 65,
+    client: "Acme Corp",
+    budget: 25000,
+    milestones: [
+      {
+        id: "m1",
+        title: "Project Setup",
+        description: "Initial project setup and planning",
+        dueDate: "2025-03-15",
+        isComplete: true,
+        deliverables: [],
+        order: 0
+      },
+      {
+        id: "m2",
+        title: "Development Phase",
+        description: "Main development phase",
+        dueDate: "2025-04-01",
+        isComplete: false,
+        deliverables: [],
+        order: 1
+      }
+    ],
     deliverables: [
       {
         id: "d1",
@@ -22,20 +39,23 @@ export const mockProjects: Project[] = [
         dueDate: "2025-03-15",
         notes: "Client loved the design!",
         fileUrl: "https://example.com/file1",
+        milestoneId: "m1",
+        isApproved: true,
         revisions: [
           {
             id: "r1",
             deliverableId: "d1",
             date: "2025-03-10",
-            notes: "Adjusted hero section colors per feedback",
+            notes: "Adjusted hero section colors per feedback"
           },
           {
             id: "r2",
             deliverableId: "d1",
             date: "2025-03-12",
-            notes: "Updated CTA placement and font size",
+            notes: "Updated CTA placement and font size"
           }
-        ]
+        ],
+        feedback: []
       },
       {
         id: "d2",
@@ -44,7 +64,10 @@ export const mockProjects: Project[] = [
         status: "In Progress",
         dueDate: "2025-03-30",
         notes: "Working on team section layout",
-        revisions: []
+        milestoneId: "m1",
+        isApproved: false,
+        revisions: [],
+        feedback: []
       },
       {
         id: "d3",
@@ -52,9 +75,14 @@ export const mockProjects: Project[] = [
         name: "Services Page",
         status: "Not Started",
         dueDate: "2025-04-10",
-        revisions: []
+        milestoneId: "m2",
+        isApproved: false,
+        revisions: [],
+        feedback: []
       }
-    ]
+    ],
+    team: ["u1", "u2"],
+    notes: "This is a sample project with mock data for testing."
   },
   {
     id: "2",

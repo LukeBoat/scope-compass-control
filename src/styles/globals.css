@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  h1 {
+    @apply text-display-1 font-display;
+  }
+  h2 {
+    @apply text-display-2 font-display;
+  }
+  h3 {
+    @apply text-display-3 font-display;
+  }
+  h4 {
+    @apply text-heading-1;
+  }
+  h5 {
+    @apply text-heading-2;
+  }
+  h6 {
+    @apply text-heading-3;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ease-in-out;
+  }
+  .btn-primary {
+    @apply btn bg-brand-blue text-white hover:bg-brand-blue-dark shadow-md;
+  }
+  .btn-secondary {
+    @apply btn bg-brand-neutral-light text-brand-neutral-dark hover:bg-brand-blue-light/10;
+  }
+  .card {
+    @apply rounded-xl bg-white p-6 shadow-card transition-all duration-200 hover:shadow-card-hover;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-success {
+    @apply badge bg-brand-status-success/10 text-brand-status-success;
+  }
+  .badge-warning {
+    @apply badge bg-brand-status-warning/10 text-brand-status-warning;
+  }
+  .badge-error {
+    @apply badge bg-brand-status-error/10 text-brand-status-error;
+  }
+  .badge-info {
+    @apply badge bg-brand-status-info/10 text-brand-status-info;
+  }
+  .progress-bar {
+    @apply h-2 w-full overflow-hidden rounded-full bg-brand-neutral-light;
+  }
+  .progress-bar-fill {
+    @apply h-full bg-brand-blue transition-all duration-300 ease-in-out;
+  }
+  .tabs-list {
+    @apply inline-flex h-10 items-center justify-center rounded-xl bg-brand-neutral-light p-1;
+  }
+  .tabs-trigger {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white data-[state=active]:text-brand-blue data-[state=active]:shadow-sm;
+  }
+} 

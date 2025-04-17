@@ -13,13 +13,14 @@ export interface Project {
   endDate: string;
   budget: number;
   client: string;
+  clients: string[];
   teamMembers: {
     id: string;
     name: string;
     email: string;
-    role: "admin" | "editor" | "viewer";
+    role: 'owner' | 'editor' | 'viewer';
     avatar?: string;
-    status: "active" | "pending";
+    status: 'active' | 'pending';
   }[];
   deliverables: Deliverable[];
   milestones: Milestone[];
@@ -56,17 +57,23 @@ export interface Deliverable {
   id: string;
   projectId: string;
   name: string;
-  status: DeliverableStatus;
+  status: "Not Started" | "In Progress" | "Delivered" | "Approved" | "Rejected" | "In Review";
   dueDate: string;
-  notes: string;
+  notes?: string;
   milestoneId: string;
   isApproved: boolean;
   revisions: Revision[];
   feedback: Feedback[];
+  approvalStatus: "pending" | "approved" | "rejected";
+  approvedBy?: string;
+  approvedAt?: string;
+  clientNotes?: string;
   title?: string;
   description?: string;
   assignedTo?: string;
-  visibility?: MilestoneVisibility;
+  visibility: "Internal" | "Client" | "Public";
+  fileUrl?: string;
+  lastUpdated?: string;
 }
 
 export interface DeliverableFeedback {
@@ -81,12 +88,39 @@ export interface DeliverableFeedback {
   createdAt: string;
 }
 
+export interface RevisionComment {
+  id: string;
+  revisionId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Revision {
   id: string;
   deliverableId: string;
-  date: string;
-  notes: string;
-  fileUrl?: string;
+  version: string;
+  status: "pending" | "approved" | "rejected" | "final";
+  date: Date;
+  changes: string;
+  files: {
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }[];
+  rejectionReason?: string;
+  approvedBy?: string;
+  approvedAt?: Date;
+  rejectedBy?: string;
+  rejectedAt?: Date;
+  markedFinalBy?: string;
+  markedFinalAt?: Date;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface ScopeChange {
@@ -103,33 +137,36 @@ export interface ScopeChange {
 export interface Invoice {
   id: string;
   projectId: string;
-  milestoneId?: string;
+  projectName: string;
+  clientName: string;
+  total: number;
+  currency: string;
+  status: InvoiceStatus;
   createdAt: string;
   dueDate: string;
-  lineItems: InvoiceLineItem[];
-  total: number;
-  status: InvoiceStatus;
+  lineItems: LineItem[];
   notes?: string;
+  paymentInstructions?: string;
+  termsAndConditions?: string;
+  isRecurring?: boolean;
+  recurringInterval?: string;
   sentAt?: string;
-  paidAt?: string;
 }
 
-export interface InvoiceLineItem {
+export interface LineItem {
   id: string;
   label: string;
-  amount: number;
-  type: "deliverable" | "hours" | "fee" | "other";
-  deliverableId?: string;
   description?: string;
-  quantity?: number;
-  unitPrice?: number;
+  amount: number;
 }
 
 export interface Feedback {
   id: string;
-  content: string;
   author: string;
-  createdAt: string;
+  role: "admin" | "client";
+  content: string;
+  timestamp: string;
+  type: "comment" | "question" | "requestChange";
 }
 
 export interface ExtendedFeedback extends Feedback {
@@ -152,7 +189,25 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'owner' | 'editor' | 'viewer';
   avatar?: string;
   status: 'active' | 'pending';
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'owner' | 'editor' | 'viewer';
+}
+
+export interface ActivityLog {
+  id: string;
+  actionType: "feedback" | "approval" | "revision" | "statusChange";
+  actorName: string;
+  actorRole: string;
+  relatedDeliverableId: string;
+  message: string;
+  timestamp: string;
 }

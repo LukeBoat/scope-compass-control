@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Invoice, InvoiceStatus } from '@/types';
+import { createProjectNotifications } from "@/services/notificationService";
+import { notificationConfig } from "@/config/notifications";
+import { useProjectContext } from "@/contexts/ProjectContext";
 
 // Mock data for development
 const mockInvoices: Invoice[] = [
@@ -91,6 +94,9 @@ export function useInvoices(projectId: string): UseInvoicesResult {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { project } = useProjectContext();
+
+  const notifications = createProjectNotifications(notificationConfig);
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -112,44 +118,60 @@ export function useInvoices(projectId: string): UseInvoicesResult {
 
   const createInvoice = async (invoice: Omit<Invoice, 'id' | 'createdAt'>) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       const newInvoice: Invoice = {
         ...invoice,
-        id: `inv_${Date.now()}`,
+        id: Math.random().toString(36).substr(2, 9),
         createdAt: new Date().toISOString(),
       };
       
       setInvoices(prev => [...prev, newInvoice]);
+      if (project) {
+        await notifications.onInvoiceCreated(project, newInvoice);
+      }
     } catch (err) {
-      throw new Error('Failed to create invoice');
+      setError(err instanceof Error ? err : new Error('Failed to create invoice'));
+      throw err;
     }
   };
 
   const updateInvoice = async (id: string, updates: Partial<Invoice>) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setInvoices(prev => prev.map(inv => 
-        inv.id === id ? { ...inv, ...updates } : inv
-      ));
+      setInvoices(prev => {
+        const index = prev.findIndex(i => i.id === id);
+        if (index === -1) return prev;
+
+        const oldInvoice = prev[index];
+        const updatedInvoice = { ...oldInvoice, ...updates };
+        const newInvoices = [...prev];
+        newInvoices[index] = updatedInvoice;
+
+        if (updates.status === "Paid" && oldInvoice.status !== "Paid" && project) {
+          notifications.onInvoicePaid(project, updatedInvoice);
+        }
+
+        return newInvoices;
+      });
     } catch (err) {
-      throw new Error('Failed to update invoice');
+      setError(err instanceof Error ? err : new Error('Failed to update invoice'));
+      throw err;
     }
   };
 
   const deleteInvoice = async (id: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setInvoices(prev => prev.filter(inv => inv.id !== id));
+      setInvoices(prev => prev.filter(i => i.id !== id));
     } catch (err) {
-      throw new Error('Failed to delete invoice');
+      setError(err instanceof Error ? err : new Error('Failed to delete invoice'));
+      throw err;
     }
   };
 
-  return { invoices, loading, error, createInvoice, updateInvoice, deleteInvoice };
+  return {
+    invoices,
+    loading,
+    error,
+    createInvoice,
+    updateInvoice,
+    deleteInvoice
+  };
 } 

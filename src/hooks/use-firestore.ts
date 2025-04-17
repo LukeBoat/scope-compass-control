@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Milestone, Deliverable } from '@/types';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProject } from '@/hooks/useProject';
 
 // Mock data for fallback
 const mockMilestones: Milestone[] = [
   {
     id: "1",
+    projectId: "1",
     title: "Phase 1: Design",
     dueDate: "2024-05-01",
     deliverables: [
@@ -15,7 +16,7 @@ const mockMilestones: Milestone[] = [
         name: "Wireframes",
         status: "In Progress",
         dueDate: "2024-04-15",
-        notes: "Create wireframes for all pages",
+        notes: "Create wireframes for all main pages",
         milestoneId: "1",
         isApproved: false,
         revisions: [],
@@ -24,26 +25,27 @@ const mockMilestones: Milestone[] = [
       {
         id: "2",
         projectId: "1",
-        name: "UI/UX Design",
+        name: "UI Design",
         status: "Not Started",
         dueDate: "2024-04-30",
-        notes: "Design user interface and experience",
+        notes: "Design UI components and styles",
         milestoneId: "1",
         isApproved: false,
         revisions: [],
         feedback: []
-      },
-    ],
+      }
+    ]
   },
   {
     id: "2",
+    projectId: "1",
     title: "Phase 2: Development",
     dueDate: "2024-06-01",
     deliverables: [
       {
         id: "3",
         projectId: "1",
-        name: "Frontend Implementation",
+        name: "Frontend Development",
         status: "Not Started",
         dueDate: "2024-05-15",
         notes: "Implement frontend components",
@@ -51,21 +53,9 @@ const mockMilestones: Milestone[] = [
         isApproved: false,
         revisions: [],
         feedback: []
-      },
-      {
-        id: "4",
-        projectId: "1",
-        name: "Backend Integration",
-        status: "Not Started",
-        dueDate: "2024-05-30",
-        notes: "Integrate with backend services",
-        milestoneId: "2",
-        isApproved: false,
-        revisions: [],
-        feedback: []
-      },
-    ],
-  },
+      }
+    ]
+  }
 ];
 
 // Cache duration in milliseconds (5 minutes)

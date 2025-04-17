@@ -17,11 +17,10 @@ interface InvoiceListProps {
 }
 
 const statusColors: Record<InvoiceStatus, { bg: string; text: string }> = {
-  draft: { bg: "bg-brand-muted-gray", text: "text-brand-neutral-dark" },
-  sent: { bg: "bg-brand-blue-light/10", text: "text-brand-blue" },
-  paid: { bg: "bg-brand-status-success/10", text: "text-brand-status-success" },
-  overdue: { bg: "bg-brand-status-error/10", text: "text-brand-status-error" },
-  cancelled: { bg: "bg-brand-status-warning/10", text: "text-brand-status-warning" }
+  Draft: { bg: "bg-brand-muted-gray", text: "text-brand-neutral-dark" },
+  Sent: { bg: "bg-brand-blue-light/10", text: "text-brand-blue" },
+  Paid: { bg: "bg-brand-status-success/10", text: "text-brand-status-success" },
+  Overdue: { bg: "bg-brand-status-error/10", text: "text-brand-status-error" }
 };
 
 export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDeleteInvoice }: InvoiceListProps) {
@@ -33,6 +32,10 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
     setIsEditorOpen(true);
   };
 
+  const handleSendInvoice = (invoice: Invoice) => {
+    onUpdateInvoice({ ...invoice, status: "Sent" as InvoiceStatus });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -42,18 +45,28 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
         </Button>
       </div>
 
-      <div className="grid gap-4">
-        {invoices.map((invoice) => (
-          <motion.div
-            key={invoice.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="group relative overflow-hidden transition-all duration-200 hover:shadow-card-hover">
-              <div className="absolute inset-0 bg-gradient-to-r from-brand-blue/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              
-              <div className="relative p-6">
+      {invoices.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="rounded-full bg-brand-purple/10 p-4 mb-4">
+            <FileText className="h-8 w-8 text-brand-purple" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">No Invoices Yet</h3>
+          <p className="text-muted-foreground mb-4 max-w-sm">
+            Start managing your project finances by creating your first invoice.
+          </p>
+          <Button onClick={onCreateInvoice}>Create First Invoice</Button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {invoices.map((invoice) => (
+            <motion.div
+              key={invoice.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="relative p-6">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <h3 className="text-lg font-semibold text-brand-neutral-dark">
@@ -66,7 +79,7 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                   <Badge 
                     className={`${statusColors[invoice.status].bg} ${statusColors[invoice.status].text}`}
                   >
-                    {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                    {invoice.status}
                   </Badge>
                 </div>
 
@@ -91,7 +104,7 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end space-x-2">
+                <div className="absolute top-6 right-6 flex items-center gap-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -108,7 +121,7 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                     </Tooltip>
                   </TooltipProvider>
 
-                  {invoice.status === 'draft' && (
+                  {invoice.status === "Draft" && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -116,7 +129,7 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-brand-blue"
-                            onClick={() => {/* Handle send */}}
+                            onClick={() => handleSendInvoice(invoice)}
                           >
                             <Send className="h-4 w-4" />
                           </Button>
@@ -133,12 +146,12 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-brand-blue"
-                          onClick={() => {/* Handle export PDF */}}
+                          disabled={true}
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Export PDF</TooltipContent>
+                      <TooltipContent>Coming Soon</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
 
@@ -158,11 +171,11 @@ export function InvoiceList({ invoices, onCreateInvoice, onUpdateInvoice, onDele
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-              </div>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {selectedInvoice && (
         <InvoiceEditor

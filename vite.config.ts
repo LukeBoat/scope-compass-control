@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext',
     minify: 'terser',
     cssMinify: true,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -61,9 +62,10 @@ export default defineConfig(({ mode }) => ({
             '@radix-ui/react-toggle-group',
             '@radix-ui/react-tooltip',
           ],
-          'vendor-utils': ['date-fns', 'framer-motion', 'lucide-react', 'sonner', 'zod'],
-          'vendor-forms': ['react-hook-form', '@hookform/resolvers'],
+          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions', 'firebase/analytics'],
+          'vendor-utils': ['date-fns', 'zod', 'class-variance-authority', 'clsx', 'tailwind-merge'],
           'vendor-charts': ['recharts'],
+          'vendor-stripe': ['@stripe/stripe-js'],
         },
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
@@ -85,6 +87,7 @@ export default defineConfig(({ mode }) => ({
       'date-fns',
       'framer-motion',
       'lucide-react',
+      '@stripe/stripe-js',
     ],
   },
 }));

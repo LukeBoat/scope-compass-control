@@ -1,8 +1,8 @@
-
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Undo, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react";
+import { useResponsiveToast } from "@/hooks/useResponsiveToast";
 
 type ToastType = "success" | "error" | "info" | "warning";
 
@@ -64,6 +64,11 @@ export const showToast = ({
     duration,
     action: combinedAction,
     icon,
+    // Add responsive positioning
+    position: window.innerWidth < 768 ? 'top-center' : 'bottom-center',
+    style: {
+      marginBottom: window.innerWidth < 768 ? '1rem' : '4rem', // More margin on desktop to avoid nav
+    },
   });
 };
 

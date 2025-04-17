@@ -37,50 +37,49 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, className }) 
       
       {/* Sidebar */}
       <aside className={cn(
-        'fixed top-0 left-0 z-40 h-screen bg-card border-r transition-all duration-300 ease-in-out flex flex-col',
+        'fixed top-0 left-0 z-50 h-screen bg-card border-r transition-all duration-300 ease-in-out flex flex-col',
+        'w-[280px] lg:w-64',
         className
       )}>
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-semibold">Scope Sentinel</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={onClose}
-              aria-label="Close sidebar"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold truncate">Scope Sentinel</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={onClose}
+            aria-label="Close sidebar"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
-          {/* Navigation */}
-          <ScrollArea className="flex-1">
-            <nav className="space-y-2 p-4">
-              {navItems.map((item) => (
-                <SidebarLink
-                  key={item.path}
-                  to={item.path}
-                  icon={item.icon}
-                  isActive={pathname === item.path || pathname.startsWith(`${item.path}/`)}
-                  onClick={() => {
-                    // Close sidebar on mobile when clicking a link
-                    if (window.innerWidth < 1024) {
-                      onClose();
-                    }
-                  }}
-                >
-                  {item.label}
-                </SidebarLink>
-              ))}
-            </nav>
-          </ScrollArea>
+        {/* Navigation */}
+        <ScrollArea className="flex-1 overflow-y-auto">
+          <nav className="space-y-2 p-4">
+            {navItems.map((item) => (
+              <SidebarLink
+                key={item.path}
+                to={item.path}
+                icon={item.icon}
+                isActive={pathname === item.path || pathname.startsWith(`${item.path}/`)}
+                onClick={() => {
+                  // Close sidebar on mobile when clicking a link
+                  if (window.innerWidth < 1024) {
+                    onClose();
+                  }
+                }}
+              >
+                {item.label}
+              </SidebarLink>
+            ))}
+          </nav>
+        </ScrollArea>
 
-          {/* Footer with Theme Toggle */}
-          <div className="p-4 border-t mt-auto">
-            <ThemeToggle />
-          </div>
+        {/* Footer with Theme Toggle */}
+        <div className="p-4 border-t mt-auto">
+          <ThemeToggle />
         </div>
       </aside>
     </>

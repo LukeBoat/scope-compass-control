@@ -2,11 +2,12 @@ import { useState, useMemo, useEffect, useId, useRef, useCallback } from "react"
 import { useParams } from "react-router-dom";
 import { useProject } from "@/hooks/useProject";
 import { useDeliverables } from "@/hooks/useDeliverables";
+import { useMilestones } from "@/hooks/useMilestones";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,20 +18,35 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
-import { Milestone as MilestoneType, Deliverable, DeliverableStatus, MilestoneVisibility, Feedback, Revision, MilestoneComment, Project } from "@/types";
+import { Milestone as MilestoneType, Deliverable, DeliverableStatus, MilestoneVisibility, Feedback, Revision, MilestoneComment, Project, TeamMember } from "@/types";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { toast } from '@/components/ui/use-toast';
 import { cn } from "@/lib/utils";
-import { Check, GripVertical, X, Clock, Circle, MessageSquare, Loader2, ChevronDown } from "lucide-react";
+import { Check, GripVertical, X, Clock, Circle, MessageSquare, Loader2, ChevronDown, Plus, CalendarIcon, CheckCircle, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Lock as LockIcon, Unlock as UnlockIcon, Plus } from "lucide-react";
+import { Unlock as UnlockIcon } from "lucide-react";
 import { calculateMilestoneProgress } from "@/utils/milestone";
 import { CSS } from "@dnd-kit/utilities";
 import React from "react";
 import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { milestoneSchema, deliverableSchema } from "@/lib/validations";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { z } from "zod";
+import { useClientMode } from "@/hooks/useClientMode";
+import { useAuth } from "@/hooks/useAuth";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { Navigate, Outlet } from "react-router-dom";
+import { UserProvider, useUser } from "@/context/UserContext";
+import { Progress } from "@/components/ui/progress";
+import { Flag, Users } from "lucide-react";
 
 interface MilestoneProps {
   projectId: string;
@@ -87,6 +103,11 @@ interface Milestone {
   deliverables: Deliverable[];
   comments?: MilestoneComment[];
   order?: number;
+}
+
+interface ProjectMilestonesProps {
+  projectId: string;
+  teamMembers: TeamMember[];
 }
 
 // Mock data for testing
@@ -161,9 +182,10 @@ interface SortableDeliverableCardProps {
   deliverable: Deliverable;
   onEdit: (deliverable: Deliverable) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: DeliverableStatus) => void;
 }
 
-function SortableDeliverableCard({ deliverable, onEdit, onDelete }: SortableDeliverableCardProps) {
+function SortableDeliverableCard({ deliverable, onEdit, onDelete, onStatusChange }: SortableDeliverableCardProps) {
   const {
     attributes,
     listeners,
@@ -187,7 +209,22 @@ function SortableDeliverableCard({ deliverable, onEdit, onDelete }: SortableDeli
             <h4 className="font-medium">{deliverable.title}</h4>
             <p className="text-sm text-gray-500">{deliverable.description}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <Select 
+              value={deliverable.status} 
+              onValueChange={(value) => onStatusChange(deliverable.id, value as DeliverableStatus)}
+            >
+              <SelectTrigger className="h-8 w-[140px]">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(DELIVERABLE_STATUSES).map(([key, value]) => (
+                  <SelectItem key={key} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm" onClick={() => onEdit(deliverable)}>
               Edit
             </Button>
@@ -240,101 +277,256 @@ const getDueBadgeVariant = (daysUntilDue: number) => {
   return "outline";
 };
 
-function AddDeliverableForm({
-  onSave,
-  onCancel,
-  milestones,
-  currentMilestoneId,
-}: {
-  onSave: (deliverable: NewDeliverable) => void;
+interface AddDeliverableFormProps {
+  milestoneId: string;
+  onSubmit: (deliverable: Omit<Deliverable, "id" | "revisions" | "feedback">) => void;
   onCancel: () => void;
-  milestones: MilestoneType[];
-  currentMilestoneId?: string;
-}) {
-  const [name, setName] = useState("");
-  const [status, setStatus] = useState<DeliverableStatus>("Not Started");
-  const [dueDate, setDueDate] = useState("");
-  const [milestoneId, setMilestoneId] = useState<string | null>(currentMilestoneId || null);
+  initialValues?: EditingDeliverable;
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    
-    onSave({
-      name: name.trim(),
-      status,
-      dueDate: dueDate || undefined,
+function AddDeliverableForm({ milestoneId, onSubmit, onCancel, initialValues }: AddDeliverableFormProps) {
+  const { project } = useProject(milestoneId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<z.infer<typeof deliverableSchema>>({
+    resolver: zodResolver(deliverableSchema),
+    defaultValues: {
+      name: initialValues?.name || "",
+      status: initialValues?.status || "Not Started" as const,
+      dueDate: initialValues?.dueDate || new Date().toISOString(),
+      notes: initialValues?.notes || "",
       milestoneId,
-    });
+      isApproved: initialValues?.isApproved || false,
+      description: initialValues?.description || "",
+      assignedTo: initialValues?.assignedTo || "",
+      visibility: initialValues?.visibility || "Public" as const,
+      projectId: project?.id || "",
+    },
+  });
+
+  const handleSubmit = async (data: z.infer<typeof deliverableSchema>) => {
+    try {
+      setIsSubmitting(true);
+      const deliverable: Omit<Deliverable, "id" | "revisions" | "feedback"> = {
+        name: data.name,
+        title: data.name,
+        status: data.status,
+        dueDate: data.dueDate,
+        notes: data.notes || "",
+        milestoneId: data.milestoneId,
+        isApproved: data.isApproved,
+        description: data.description || "",
+        assignedTo: data.assignedTo || "",
+        visibility: data.visibility,
+        projectId: data.projectId,
+      };
+      await onSubmit(deliverable);
+    } catch (error) {
+      console.error("Error submitting deliverable:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save deliverable. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <motion.form
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      onSubmit={handleSubmit}
-      className="space-y-4 p-4 border rounded-lg bg-card"
-    >
-      <div className="space-y-2">
-        <Input
-          placeholder="Deliverable name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          autoFocus
-          className="h-8"
-        />
-        <Select value={status} onValueChange={(value: DeliverableStatus) => setStatus(value)}>
-          <SelectTrigger className="h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Not Started">Not Started</SelectItem>
-            <SelectItem value="In Progress">In Progress</SelectItem>
-            <SelectItem value="Delivered">Delivered</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="h-8"
-        />
-        <Select 
-          value={milestoneId || ""} 
-          onValueChange={(value) => setMilestoneId(value || null)}
-        >
-          <SelectTrigger className="h-8">
-            <SelectValue placeholder="Assign to milestone (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Unassigned</SelectItem>
-            {milestones.map((milestone) => (
-              <SelectItem key={milestone.id} value={milestone.id}>
-                {milestone.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-          className="h-8"
-        >
-          <X className="h-4 w-4 mr-1" />
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" className="h-8">
-          <Check className="h-4 w-4 mr-1" />
-          Add
-        </Button>
-      </div>
-    </motion.form>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <div className="grid gap-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Name</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Deliverable name"
+                    {...field}
+                    disabled={isSubmitting}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (Optional)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Deliverable description"
+                    {...field}
+                    disabled={isSubmitting}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Status</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="In Review">In Review</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Approved">Approved</SelectItem>
+                    <SelectItem value="Rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="dueDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Due Date</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "justify-start text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={field.value ? new Date(field.value) : undefined}
+                      onSelect={(date) => field.onChange(date?.toISOString())}
+                      initialFocus
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today;
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="notes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes (Optional)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Additional notes"
+                    {...field}
+                    disabled={isSubmitting}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="visibility"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Visibility</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select visibility" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Public">Public</SelectItem>
+                    <SelectItem value="Internal">Internal</SelectItem>
+                    <SelectItem value="Private">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="isApproved"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel>Mark as approved</FormLabel>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex justify-end space-x-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
 
@@ -433,340 +625,265 @@ function MilestoneComments({ milestoneId, comments, onAddComment }: MilestoneCom
 }
 
 interface MilestoneFormProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (milestone: Omit<MilestoneType, "id" | "deliverables" | "comments">) => void;
-  initialData?: MilestoneType;
+  project: Project;
+  initialData?: Milestone;
+  onSubmit: (data: Milestone) => void;
+  onCancel: () => void;
   onDelete?: () => void;
 }
 
-function MilestoneForm({ open, onOpenChange, onSubmit, initialData, onDelete }: MilestoneFormProps) {
-  const { project } = useProject(initialData?.projectId || "");
-  const [title, setTitle] = useState(initialData?.title || "");
-  const [dueDate, setDueDate] = useState<Date | undefined>(
-    initialData?.dueDate ? new Date(initialData.dueDate) : undefined
-  );
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    initialData?.startDate ? new Date(initialData.startDate) : undefined
-  );
-  const [description, setDescription] = useState(initialData?.description || "");
-  const [isComplete, setIsComplete] = useState(initialData?.isComplete || false);
-  const [visibility, setVisibility] = useState<MilestoneVisibility>(
-    initialData?.visibility || "Public"
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<{
-    title?: string;
-    dueDate?: string;
-    startDate?: string;
-    description?: string;
-  }>({});
+const MilestoneForm = ({
+  project,
+  initialData,
+  onSubmit,
+  onCancel,
+  onDelete,
+}: {
+  project: Project;
+  initialData?: Milestone;
+  onSubmit: (data: Milestone) => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) => {
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const form = useForm<z.infer<typeof milestoneSchema>>({
+    resolver: zodResolver(milestoneSchema),
+    defaultValues: {
+      title: initialData?.title || "",
+      description: initialData?.description || "",
+      dueDate: initialData?.dueDate || new Date().toISOString(),
+      startDate: initialData?.startDate || new Date().toISOString(),
+      isComplete: initialData?.isComplete || false,
+      visibility: initialData?.visibility || "Internal",
+      projectId: project.id,
+    },
+  });
 
-  // Reset form when initialData changes
   useEffect(() => {
     if (initialData) {
-      setTitle(initialData.title);
-      setDueDate(initialData.dueDate ? new Date(initialData.dueDate) : undefined);
-      setStartDate(initialData.startDate ? new Date(initialData.startDate) : undefined);
-      setDescription(initialData.description || "");
-      setIsComplete(initialData.isComplete || false);
-      setVisibility(initialData.visibility || "Public");
-    } else {
-      setTitle("");
-      setDueDate(undefined);
-      setStartDate(undefined);
-      setDescription("");
-      setIsComplete(false);
-      setVisibility("Public");
+      form.reset({
+        title: initialData.title,
+        description: initialData.description || "",
+        dueDate: initialData.dueDate || new Date().toISOString(),
+        startDate: initialData.startDate || new Date().toISOString(),
+        isComplete: initialData.isComplete,
+        visibility: initialData.visibility,
+        projectId: project.id,
+      });
     }
-    // Clear errors when form is reset
-    setFormErrors({});
-  }, [initialData]);
+  }, [initialData, form, project.id]);
 
-  // Real-time validation
-  useEffect(() => {
-    const errors: {
-      title?: string;
-      dueDate?: string;
-      startDate?: string;
-      description?: string;
-    } = {};
+  const handleSubmit = async (data: z.infer<typeof milestoneSchema>) => {
+    try {
+      const milestoneData: Milestone = {
+        id: initialData?.id || crypto.randomUUID(),
+        projectId: project.id,
+        title: data.title,
+        description: data.description,
+        dueDate: data.dueDate,
+        startDate: data.startDate,
+        isComplete: data.isComplete,
+        visibility: data.visibility,
+        deliverables: initialData?.deliverables || [],
+        comments: initialData?.comments || [],
+        order: initialData?.order || 0,
+      };
 
-    // Title validation
-    if (!title.trim()) {
-      errors.title = "Title is required";
-    } else if (title.length < 3) {
-      errors.title = "Title must be at least 3 characters long";
-    } else if (title.length > 100) {
-      errors.title = "Title must be less than 100 characters";
+      await onSubmit(milestoneData);
+    } catch (error) {
+      console.error("Error submitting milestone:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save milestone. Please try again.",
+        variant: "destructive",
+      });
     }
-
-    // Description validation
-    if (description.length > 1000) {
-      errors.description = "Description must be less than 1000 characters";
-    }
-
-    // Date validation
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (startDate) {
-      if (startDate < today) {
-        errors.startDate = "Start date cannot be in the past";
-      }
-    }
-
-    if (dueDate) {
-      if (dueDate < today) {
-        errors.dueDate = "Due date cannot be in the past";
-      }
-      if (startDate && dueDate < startDate) {
-        errors.dueDate = "Due date must be after start date";
-      }
-    }
-
-    // Project timeline validation
-    if (project) {
-      const projectStartDate = new Date(project.startDate);
-      const projectEndDate = new Date(project.endDate);
-
-      if (startDate && startDate < projectStartDate) {
-        errors.startDate = "Start date must be within project timeline";
-      }
-      if (dueDate && dueDate > projectEndDate) {
-        errors.dueDate = "Due date must be within project timeline";
-      }
-    }
-
-    setFormErrors(errors);
-  }, [title, description, startDate, dueDate, project]);
-
-  const validateForm = (): boolean => {
-    return Object.keys(formErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+  const renderDatePicker = (field: any, label: string, required = false) => {
+    if (isMobile) {
+      return (
+        <FormItem className="flex flex-col">
+          <FormLabel className="flex items-center gap-1">
+            {label}
+            {required && <span className="text-destructive">*</span>}
+          </FormLabel>
+          <FormControl>
+            <Input
+              type="date"
+              value={field.value ? format(new Date(field.value), "yyyy-MM-dd") : ""}
+              onChange={(e) => {
+                const date = new Date(e.target.value);
+                field.onChange(date.toISOString());
+              }}
+              className="w-full"
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      );
     }
-    
-    setIsSubmitting(true);
-    
-    onSubmit({
-      projectId: project.id,
-      title: title.trim(),
-      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
-      startDate: startDate ? startDate.toISOString().split('T')[0] : undefined,
-      description: description.trim() || undefined,
-      isComplete,
-      visibility,
-    });
-    
-    setIsSubmitting(false);
-    onOpenChange(false);
+
+    return (
+      <FormItem className="flex flex-col">
+        <FormLabel className="flex items-center gap-1">
+          {label}
+          {required && <span className="text-destructive">*</span>}
+        </FormLabel>
+        <Popover>
+          <PopoverTrigger asChild>
+            <FormControl>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full pl-3 text-left font-normal",
+                  !field.value && "text-muted-foreground"
+                )}
+              >
+                {field.value ? (
+                  format(new Date(field.value), "PPP")
+                ) : (
+                  <span>Pick a date</span>
+                )}
+                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+              </Button>
+            </FormControl>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={field.value ? new Date(field.value) : undefined}
+              onSelect={(date) => field.onChange(date?.toISOString() || "")}
+              disabled={(date) =>
+                date < new Date("1900-01-01")
+              }
+              initialFocus
+              className="rounded-md border shadow-md"
+            />
+          </PopoverContent>
+        </Popover>
+        <FormMessage />
+      </FormItem>
+    );
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>{initialData ? "Edit Milestone" : "Create Milestone"}</DialogTitle>
-          <DialogDescription>
-            {initialData 
-              ? "Update the milestone details below." 
-              : "Fill in the details to create a new milestone."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Milestone title"
-                required
-                aria-invalid={!!formErrors.title}
-                aria-describedby={formErrors.title ? "title-error" : undefined}
-                className={cn(formErrors.title && "border-red-500 focus-visible:ring-red-500")}
-              />
-              {formErrors.title && (
-                <p id="title-error" className="text-sm text-red-500">
-                  {formErrors.title}
-                </p>
-              )}
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="startDate">Start Date (Optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground",
-                      formErrors.startDate && "border-red-500"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                    disabled={(date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return date < today;
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-              {formErrors.startDate && (
-                <p className="text-sm text-red-500">
-                  {formErrors.startDate}
-                </p>
-              )}
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="dueDate">Due Date (Optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground",
-                      formErrors.dueDate && "border-red-500"
-                    )}
-                  >
-                    <Calendar
-                      mode="single"
-                      selected={dueDate}
-                      onSelect={setDueDate}
-                      initialFocus
-                      disabled={(date) => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        return date < today;
-                      }}
-                    />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={setDueDate}
-                    initialFocus
-                    disabled={(date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return date < today;
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-              {formErrors.dueDate && (
-                <p className="text-sm text-red-500">
-                  {formErrors.dueDate}
-                </p>
-              )}
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Milestone description"
-                rows={3}
-                className={cn(formErrors.description && "border-red-500 focus-visible:ring-red-500")}
-                aria-invalid={!!formErrors.description}
-                aria-describedby={formErrors.description ? "description-error" : undefined}
-              />
-              {formErrors.description && (
-                <p id="description-error" className="text-sm text-red-500">
-                  {formErrors.description}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                {description.length}/1000 characters
-              </p>
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="visibility">Visibility</Label>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="flex items-center gap-1">
+                Title
+                <span className="text-destructive">*</span>
+              </FormLabel>
+              <FormControl>
+                <Input placeholder="Enter milestone title" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Enter milestone description"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => renderDatePicker(field, "Start Date")}
+          />
+
+          <FormField
+            control={form.control}
+            name="dueDate"
+            render={({ field }) => renderDatePicker(field, "Due Date", true)}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="visibility"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Visibility</FormLabel>
               <Select
-                value={visibility}
-                onValueChange={(value: MilestoneVisibility) => setVisibility(value)}
+                onValueChange={field.onChange}
+                defaultValue={field.value}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select visibility" />
-                </SelectTrigger>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select visibility" />
+                  </SelectTrigger>
+                </FormControl>
                 <SelectContent>
-                  <SelectItem value="Public">Public</SelectItem>
                   <SelectItem value="Internal">Internal</SelectItem>
-                  <SelectItem value="Private">Private</SelectItem>
+                  <SelectItem value="Client">Client</SelectItem>
+                  <SelectItem value="Public">Public</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isComplete"
-                checked={isComplete}
-                onCheckedChange={setIsComplete}
-              />
-              <Label htmlFor="isComplete">Mark as complete</Label>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            {initialData && onDelete && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={onDelete}
-                disabled={isSubmitting}
-              >
-                Delete
-              </Button>
-            )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="isComplete"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Mark as Complete</FormLabel>
+                <FormDescription>
+                  Mark this milestone as completed
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-2">
+          {onDelete && (
             <Button
               type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
+              variant="destructive"
+              onClick={onDelete}
             >
-              Cancel
+              Delete
             </Button>
-            <Button type="submit" disabled={isSubmitting || !validateForm()}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </div>
+      </form>
+    </Form>
   );
-}
+};
 
 interface MilestoneItemProps {
   milestone: Milestone;
@@ -776,6 +893,10 @@ interface MilestoneItemProps {
   onDelete: () => void;
   onAddDeliverable: () => void;
   updateState: (updates: Partial<Milestone>) => void;
+  project: Project | null;
+  deliverables: Deliverable[];
+  updateDeliverable: (id: string, updates: Partial<Deliverable>) => void;
+  updateProject: (updates: Partial<Project>) => void;
 }
 
 function SortableMilestoneItem({
@@ -785,7 +906,11 @@ function SortableMilestoneItem({
   onEdit,
   onDelete,
   onAddDeliverable,
-  updateState
+  updateState,
+  project,
+  deliverables,
+  updateDeliverable,
+  updateProject
 }: MilestoneItemProps) {
   const {
     attributes,
@@ -796,16 +921,12 @@ function SortableMilestoneItem({
     isDragging,
   } = useSortable({ id: milestone.id });
 
-  const style = {
+  const style = useMemo(() => ({
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 1 : 0,
-  };
-
-  const handleStatusChange = (status: DeliverableStatus) => {
-    updateState({ isComplete: status === "Approved" || status === "Delivered" });
-  };
+  }), [transform, transition, isDragging]);
 
   return (
     <AccordionItem
@@ -831,38 +952,36 @@ function SortableMilestoneItem({
       
       <div className="flex items-center justify-between w-full pl-8">
         <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">{milestone.title}</h3>
-              {milestone.visibility === "Internal" && (
-                <LockIcon className="h-4 w-4 text-muted-foreground" />
-              )}
-              {milestone.visibility === "Client" && (
-                <UnlockIcon className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              {milestone.dueDate ? (
-                <>
-                  {calculateDaysUntilDue(milestone.dueDate) < 0 ? (
-                    <Badge variant="destructive" className="text-xs">
-                      {Math.abs(calculateDaysUntilDue(milestone.dueDate))} days overdue
-                    </Badge>
-                  ) : calculateDaysUntilDue(milestone.dueDate) === 0 ? (
-                    <Badge variant="secondary" className="text-xs">
-                      Due today
-                    </Badge>
-                  ) : (
-                    <Badge variant="default" className="text-xs">
-                      {calculateDaysUntilDue(milestone.dueDate)} days left
-                    </Badge>
-                  )}
-                </>
-              ) : (
-                <span>No due date</span>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold">{milestone.title}</h3>
+            {milestone.visibility === "Internal" && (
+              <LockIcon className="h-4 w-4 text-muted-foreground" />
+            )}
+            {milestone.visibility === "Client" && (
+              <UnlockIcon className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            {milestone.dueDate ? (
+              <>
+                {calculateDaysUntilDue(milestone.dueDate) < 0 ? (
+                  <Badge variant="destructive" className="text-xs">
+                    {Math.abs(calculateDaysUntilDue(milestone.dueDate))} days overdue
+                  </Badge>
+                ) : calculateDaysUntilDue(milestone.dueDate) === 0 ? (
+                  <Badge variant="secondary" className="text-xs">
+                    Due today
+                  </Badge>
+                ) : (
+                  <Badge variant="default" className="text-xs">
+                    {calculateDaysUntilDue(milestone.dueDate)} days left
+                  </Badge>
+                )}
+              </>
+            ) : (
+              <span>No due date</span>
+            )}
           </div>
         </div>
       </div>
@@ -874,42 +993,61 @@ function SortableMilestoneItem({
               {milestone.description}
             </div>
           )}
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onAddDeliverable}
-              className="flex items-center gap-1"
-            >
-              <Plus className="h-4 w-4" />
-              Add Deliverable
-            </Button>
-          </div>
+          {!isClientMode && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddDeliverable}
+                className="flex items-center gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                Add Deliverable
+              </Button>
+            </div>
+          )}
           <SortableContext
             items={milestone.deliverables.map((d) => d.id)}
             strategy={verticalListSortingStrategy}
           >
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               {milestone.deliverables.length > 0 ? (
-                milestone.deliverables.map((deliverable) => (
+                milestone.deliverables.map((deliverable, index) => (
                   <motion.div
                     key={deliverable.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ 
+                      duration: 0.2,
+                      delay: index * 0.05,
+                      ease: "easeOut"
+                    }}
+                    style={{
+                      willChange: "transform, opacity",
+                      transform: "translateZ(0)"
+                    }}
                   >
                     <SortableDeliverableCard
                       deliverable={deliverable}
-                      onEdit={(d) => handleStatusChange(d.status)}
-                      onDelete={(id) => onDelete()}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onStatusChange={(id, status) => updateDeliverable(id, { status })}
                     />
                   </motion.div>
                 ))
               ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  No deliverables match the current filters
-                </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center py-4 text-muted-foreground"
+                >
+                  {isClientMode 
+                    ? "Waiting on input from team"
+                    : "No deliverables match the current filters"
+                  }
+                </motion.div>
               )}
             </AnimatePresence>
           </SortableContext>
@@ -947,9 +1085,29 @@ const MemoizedAddDeliverableForm = React.memo(AddDeliverableForm);
 const MILESTONES_PER_PAGE = 5;
 const DELIVERABLES_PER_PAGE = 10;
 
-export function ProjectMilestones({ projectId }: { projectId: string }) {
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  // ...other config
+};
+
+const app = initializeApp(firebaseConfig);
+
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+export function ProjectMilestones({ projectId, teamMembers }: ProjectMilestonesProps) {
+  const { 
+    canEditMilestones, 
+    canViewMilestones,
+    canEditDeliverables,
+    canViewDeliverables
+  } = usePermissions({ projectId, teamMembers });
+  
   const { project, updateProject } = useProject(projectId);
-  const { deliverables, addDeliverable, updateDeliverable, deleteDeliverable } = useDeliverables(projectId);
+  const { deliverables, createDeliverable, updateDeliverable, deleteDeliverable } = useDeliverables(projectId);
+  const { loading: milestonesLoading, error: milestonesError, createMilestone } = useMilestones(projectId);
   const [editingMilestone, setEditingMilestone] = useState<EditingMilestone | null>(null);
   const [editingDeliverable, setEditingDeliverable] = useState<EditingDeliverable | null>(null);
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
@@ -973,7 +1131,7 @@ export function ProjectMilestones({ projectId }: { projectId: string }) {
     if (!project?.milestones) return [];
     return project.milestones.filter(milestone => 
       milestone.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      milestone.description.toLowerCase().includes(searchQuery.toLowerCase())
+      milestone.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [project?.milestones, searchQuery]);
 
@@ -1032,45 +1190,46 @@ export function ProjectMilestones({ projectId }: { projectId: string }) {
   }, [searchQuery]);
 
   // Memoized handlers
-  const handleAddDeliverable = useCallback(async (milestoneId: string, name: string) => {
-    if (!project) return;
-    
+  const handleAddDeliverable = useCallback(async (milestoneId: string) => {
+    setAddingDeliverableToMilestoneId(milestoneId);
+    setShowDeliverableForm(true);
+  }, []);
+
+  const handleSubmitDeliverable = async (deliverable: Omit<Deliverable, "id" | "feedback" | "revisions">) => {
     try {
       setIsLoading(true);
-      const newDeliverable: Omit<Deliverable, "id"> = {
-        projectId,
-        name,
-        title: name,
-        status: "pending" as DeliverableStatus,
-        dueDate: new Date().toISOString(),
-        description: "",
-        assignedTo: "",
-        visibility: "public" as MilestoneVisibility,
-        notes: "",
-        milestoneId,
-        isApproved: false,
-        feedback: [],
-        revisions: []
-      };
-      
-      await addDeliverable(newDeliverable);
+      await createDeliverable(deliverable);
+      setShowDeliverableForm(false);
       setAddingDeliverableToMilestoneId(null);
+      setEditingDeliverable(null);
     } catch (error) {
-      setError(error as Error);
-      console.error("Error adding deliverable:", error);
+      console.error("Error creating deliverable:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create deliverable",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [project, projectId, addDeliverable]);
+  };
 
   const handleUpdateDeliverable = useCallback(async (deliverableId: string, updates: Partial<Deliverable>) => {
+    if (!deliverableId || !updates) {
+      console.error("Missing required arguments for updating deliverable");
+      return;
+    }
     try {
       setIsLoading(true);
       await updateDeliverable(deliverableId, updates);
       setEditingDeliverable(null);
     } catch (error) {
-      setError(error as Error);
       console.error("Error updating deliverable:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update deliverable",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1079,7 +1238,7 @@ export function ProjectMilestones({ projectId }: { projectId: string }) {
   const handleDeleteDeliverable = useCallback(async (deliverableId: string) => {
     const deliverable = deliverables.find(d => d.id === deliverableId);
     if (deliverable) {
-      setDeletingDeliverable({ id: deliverableId, name: deliverable.title });
+      setDeletingDeliverable({ id: deliverableId, name: deliverable.title || deliverable.name });
     }
   }, [deliverables]);
 
@@ -1149,35 +1308,40 @@ export function ProjectMilestones({ projectId }: { projectId: string }) {
   }, [project, updateProject]);
 
   const handleCreateMilestone = useCallback(async () => {
+    if (!editingMilestone?.title) {
+      console.error("Cannot create milestone without a title");
+      return;
+    }
+
     try {
-      const newMilestone: Omit<MilestoneType, "id" | "comments" | "deliverables"> = {
+      setIsLoading(true);
+      setError(null);
+
+      const newMilestone: Omit<Milestone, "id" | "deliverables" | "comments"> = {
         projectId,
         title: editingMilestone.title,
         description: editingMilestone.description,
         dueDate: editingMilestone.dueDate,
         startDate: editingMilestone.startDate,
         isComplete: editingMilestone.isComplete ?? false,
-        visibility: editingMilestone.visibility,
+        visibility: editingMilestone.visibility ?? "Public",
         order: project.milestones.length
       };
 
-      const milestoneWithDefaults: MilestoneType = {
-        ...newMilestone,
-        id: "", // This will be replaced by the backend
-        deliverables: [],
-        comments: []
-      };
-
-      await updateProject({
-        ...project,
-        milestones: [...project.milestones, milestoneWithDefaults]
-      });
-      setShowMilestoneForm(false);
-      setEditingMilestone({} as EditingMilestone);
+      // Create the milestone through the hook
+      const createdMilestone = await createMilestone(newMilestone);
+      
+      if (createdMilestone) {
+        setShowMilestoneForm(false);
+        setEditingMilestone(null);
+      }
     } catch (error) {
+      setError(error as Error);
       console.error("Error creating milestone:", error);
+    } finally {
+      setIsLoading(false);
     }
-  }, [projectId, editingMilestone, project.milestones.length, updateProject]);
+  }, [projectId, editingMilestone, project.milestones.length, createMilestone]);
 
   const handleEditMilestone = useCallback((milestone: MilestoneType) => {
     setEditingMilestone({
@@ -1207,127 +1371,114 @@ export function ProjectMilestones({ projectId }: { projectId: string }) {
     }
   }, [project, updateProject]);
 
-  return (
-    <div className="space-y-4" role="region" aria-label="Project Milestones">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Milestones</h2>
-        <div className="flex items-center space-x-2">
-          <Input
-            type="search"
-            placeholder="Search milestones..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search milestones"
-            className="w-64"
-          />
-          <Dialog open={showMilestoneForm} onOpenChange={setShowMilestoneForm}>
-            <DialogTrigger asChild>
-              <Button aria-label="Add new milestone">Add Milestone</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Milestone</DialogTitle>
-              </DialogHeader>
-              {/* Milestone form content */}
-            </DialogContent>
-          </Dialog>
-        </div>
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
       </div>
+    );
+  }
 
-      <DndContext
-        sensors={useSensors(
-          useSensor(PointerSensor, {
-            activationConstraint: {
-              distance: 8,
-            },
-          }),
-          useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-          })
-        )}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={paginatedMilestones.map(m => m.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <Accordion
-            type="multiple"
-            value={Array.from(expandedMilestones)}
-            onValueChange={(value) => setExpandedMilestones(new Set(value))}
-            className="space-y-4"
-          >
-            {paginatedMilestones.map((milestone) => (
-              <SortableMilestoneItem
-                key={milestone.id}
-                milestone={milestone}
-                isExpanded={expandedMilestones.has(milestone.id)}
-                onToggle={() => {
-                  const newExpanded = new Set(expandedMilestones);
-                  if (newExpanded.has(milestone.id)) {
-                    newExpanded.delete(milestone.id);
-                  } else {
-                    newExpanded.add(milestone.id);
-                  }
-                  setExpandedMilestones(newExpanded);
-                }}
-                onEdit={() => handleEditMilestone(milestone)}
-                onDelete={() => handleDeleteMilestone(milestone.id)}
-                onAddDeliverable={() => setAddingDeliverableToMilestoneId(milestone.id)}
-                updateState={(updates) => handleUpdateMilestone(milestone.id, updates)}
-              />
-            ))}
-          </Accordion>
-        </SortableContext>
-      </DndContext>
-
-      {hasMoreMilestones && (
-        <div className="flex justify-center mt-4">
-          <Button 
-            variant="outline" 
-            onClick={loadMoreMilestones}
-            className="flex items-center gap-2"
-          >
-            Load More Milestones
-            <ChevronDown className="h-4 w-4" />
-          </Button>
+  if (project?.milestones.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="rounded-full bg-brand-blue/10 p-4 mb-4">
+          <Flag className="h-8 w-8 text-brand-blue" />
         </div>
-      )}
+        <h3 className="text-lg font-semibold mb-2">No Milestones Yet</h3>
+        <p className="text-muted-foreground mb-4 max-w-sm">
+          Break down your project into manageable milestones to track progress and keep your team aligned.
+        </p>
+        <Button className="bg-brand-blue hover:bg-brand-blue-dark">
+          <Plus className="h-4 w-4 mr-2" />
+          Create First Milestone
+        </Button>
+      </div>
+    );
+  }
 
-      {/* Add Deliverable Dialog */}
-      {addingDeliverableToMilestoneId && (
-        <Dialog open onOpenChange={() => setAddingDeliverableToMilestoneId(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Deliverable</DialogTitle>
-            </DialogHeader>
-            {/* Deliverable form content */}
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Edit Deliverable Dialog */}
-      {editingDeliverable && (
-        <Dialog open onOpenChange={() => setEditingDeliverable(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Deliverable</DialogTitle>
-            </DialogHeader>
-            {/* Deliverable edit form content */}
-          </DialogContent>
-        </Dialog>
-      )}
-
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Project Milestones</h2>
+        {canEditMilestones && (
+          <Button onClick={() => setShowMilestoneForm(true)}>
+            Add Milestone
+          </Button>
+        )}
+      </div>
+      
+      {project?.milestones?.map((milestone) => (
+        <Card key={milestone.id} className="border rounded-lg p-4">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">{milestone.title}</CardTitle>
+              <Badge variant="outline">{milestone.visibility}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span>Due {formatDate(milestone.dueDate)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  <span>{milestone.deliverables.length} assigned</span>
+                </div>
+              </div>
+              <Progress value={calculateMilestoneProgress(milestone.deliverables)} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+      
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         isOpen={!!deletingDeliverable}
         onClose={() => setDeletingDeliverable(null)}
         onConfirm={handleConfirmDelete}
         title="Delete Deliverable"
-        description={`Are you sure you want to delete "${deletingDeliverable?.name}"? This action cannot be undone.`}
+        description="Are you sure you want to delete this deliverable? This action cannot be undone."
         itemName={deletingDeliverable?.name || ""}
       />
+
+      {showDeliverableForm && (
+        <Dialog open={showDeliverableForm} onOpenChange={setShowDeliverableForm}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{editingDeliverable ? "Edit Deliverable" : "Add Deliverable"}</DialogTitle>
+            </DialogHeader>
+            <AddDeliverableForm
+              milestoneId={addingDeliverableToMilestoneId || ""}
+              onSubmit={handleSubmitDeliverable}
+              onCancel={() => {
+                setShowDeliverableForm(false);
+                setAddingDeliverableToMilestoneId(null);
+                setEditingDeliverable(null);
+              }}
+              initialValues={editingDeliverable}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
+}
+
+export function ProtectedRoute({
+  allowedRoles,
+  userRole,
+  loading,
+}: {
+  allowedRoles: string[];
+  userRole: string | null;
+  loading: boolean;
+}) {
+  if (loading) return <div>Loading...</div>;
+  if (!userRole) return <Navigate to="/login" />;
+  if (!allowedRoles.includes(userRole)) return <Navigate to="/login" />;
+  return <Outlet />;
 } 

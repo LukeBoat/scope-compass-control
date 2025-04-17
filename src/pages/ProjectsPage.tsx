@@ -2,9 +2,13 @@ import { useProjects } from "@/hooks/useProjects";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderPlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export function ProjectsPage() {
   const { projects, isLoading } = useProjects();
+  
+  // Set page title
+  usePageTitle("Projects");
 
   const handleCreateProject = () => {
     // TODO: Implement project creation

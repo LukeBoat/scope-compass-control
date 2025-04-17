@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { format, addDays, addWeeks, startOfWeek, endOfWeek, isSameDay, isAfter, isBefore, differenceInDays, subDays, addMonths, endOfMonth, addQuarters, endOfQuarter, addYears, endOfYear } from "date-fns";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Calendar, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Calendar, Clock, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
 import { Milestone, Deliverable, Revision } from "@/types";
@@ -186,9 +186,8 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
       </div>
     );
   }
@@ -222,6 +221,20 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
     ...project.deliverables.map(d => ({ type: 'deliverable' as const, date: d.dueDate || '', item: d })),
     ...allRevisions.map(r => ({ type: 'revision' as const, date: r.date, item: r }))
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (!timelineItems || timelineItems.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="rounded-full bg-primary/10 p-3 mb-4">
+          <History className="h-6 w-6 text-primary" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No Timeline Activity Yet</h3>
+        <p className="text-muted-foreground mb-4 max-w-sm">
+          Timeline activity will appear here as you make changes to your project, such as updating milestones, deliverables, or scope changes.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

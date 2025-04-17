@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { motion } from "framer-motion";
-import { Plus, Trash2, Save, Send, Download, Clock, CheckCircle, AlertCircle, DollarSign } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Trash2, Save, Send, Download, Clock, CheckCircle, AlertCircle, DollarSign, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
 
 interface InvoiceEditorProps {
   invoice?: Invoice;
@@ -61,6 +62,7 @@ export function InvoiceEditor({
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [clientEmail, setClientEmail] = useState("");
   const [sendMessage, setSendMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Calculate total when line items change
   useEffect(() => {
@@ -93,8 +95,30 @@ export function InvoiceEditor({
     }));
   };
 
-  const handleSave = () => {
-    onSave(editedInvoice);
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      await onSave(editedInvoice);
+      
+      // Show success toast with animation
+      toast.success("Invoice saved successfully", {
+        duration: 3000,
+        className: "bg-green-50 border-green-200",
+        description: "Your changes have been saved.",
+        action: {
+          label: "View",
+          onClick: () => {/* Handle view action */}
+        }
+      });
+    } catch (error) {
+      toast.error("Failed to save invoice", {
+        duration: 3000,
+        className: "bg-red-50 border-red-200",
+        description: "Please try again later."
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSend = () => {
@@ -173,9 +197,35 @@ export function InvoiceEditor({
               </Button>
             </>
           )}
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Save
+          <Button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="relative"
+          >
+            <AnimatePresence mode="wait">
+              {isSaving ? (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="save"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </motion.div>
+              )}
+            </AnimatePresence>
           </Button>
         </div>
       </div>

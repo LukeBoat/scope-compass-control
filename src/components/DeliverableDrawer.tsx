@@ -1,28 +1,27 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Clock, FileText, MessageSquare, History, Send, CheckCircle, AlertCircle, Lock, Unlock } from "lucide-react";
-import { Deliverable } from "@/types";
+import { X, Clock, FileText, MessageSquare, History, Send, CheckCircle, AlertCircle, Lock, Unlock, Share2, Copy } from "lucide-react";
+import { Deliverable, Feedback } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DeliverableFeedback } from "./DeliverableFeedback";
+import { DeliverableFeedback } from "@/components/DeliverableFeedback";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface DeliverableDrawerProps {
-  deliverable: Deliverable;
+  deliverable: Deliverable | null;
   isOpen: boolean;
   onClose: () => void;
-  onApprove: (deliverableId: string, comment?: string) => void;
-  onAddComment: (deliverableId: string, comment: any) => void;
-  onAddAttachment: (deliverableId: string, file: File) => Promise<{ name: string; url: string }>;
-  onUpdateStatus: (deliverableId: string, status: string) => void;
+  onUpdateStatus: (deliverableId: string, status: Deliverable["status"]) => Promise<void>;
   onRequestFeedback: (deliverableId: string, clientEmail: string, message?: string) => void;
   onReopenForEdit: (deliverableId: string) => void;
   isAdmin?: boolean;
@@ -32,9 +31,6 @@ export function DeliverableDrawer({
   deliverable,
   isOpen,
   onClose,
-  onApprove,
-  onAddComment,
-  onAddAttachment,
   onUpdateStatus,
   onRequestFeedback,
   onReopenForEdit,
@@ -42,24 +38,42 @@ export function DeliverableDrawer({
 }: DeliverableDrawerProps) {
   const [activeTab, setActiveTab] = useState("details");
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [clientEmail, setClientEmail] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "delivered":
-        return "bg-green-500/10 text-green-500";
-      case "approved":
-        return "bg-blue-500/10 text-blue-500";
-      case "pending feedback":
-        return "bg-yellow-500/10 text-yellow-500";
-      case "changes requested":
-        return "bg-orange-500/10 text-orange-500";
-      case "in progress":
-        return "bg-purple-500/10 text-purple-500";
+    switch (status) {
+      case "Approved":
+        return "bg-green-100 text-green-800";
+      case "Rejected":
+        return "bg-red-100 text-red-800";
+      case "In Review":
+        return "bg-yellow-100 text-yellow-800";
+      case "In Progress":
+        return "bg-blue-100 text-blue-800";
       default:
-        return "bg-gray-500/10 text-gray-500";
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const handleUpdateStatus = async (status: Deliverable["status"]) => {
+    if (!deliverable) return;
+    try {
+      await onUpdateStatus(deliverable.id, status);
+      toast({
+        title: "Status Updated",
+        description: `Deliverable status has been updated to ${status}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update status. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -75,22 +89,49 @@ export function DeliverableDrawer({
     setShowReopenDialog(false);
   };
 
+  const handleShare = () => {
+    setShowShareDialog(true);
+  };
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/view/${deliverable.projectId}/${deliverable.id}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: "Link Copied",
+      description: "The sharing link has been copied to your clipboard.",
+    });
+  };
+
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isOpen && deliverable && (
         <motion.div
           initial={{ x: "100%" }}
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
           transition={{ type: "spring", damping: 20 }}
-          className="fixed right-0 top-0 h-full w-[400px] bg-background border-l shadow-lg z-50"
+          className="fixed inset-y-0 right-0 w-full md:w-[600px] bg-background border-l shadow-lg z-50"
         >
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold truncate">{deliverable.name}</h2>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={handleShare}>
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Share deliverable</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <Button variant="ghost" size="icon" onClick={onClose}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
@@ -114,130 +155,80 @@ export function DeliverableDrawer({
               <ScrollArea className="flex-1">
                 <TabsContent value="details" className="p-4 space-y-4">
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className={getStatusColor(deliverable.status)}>
-                        {deliverable.status}
-                      </Badge>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>Due {format(new Date(deliverable.dueDate), "MMM d, yyyy")}</span>
-                      </div>
-                    </div>
+                    <h3 className="font-medium">Status</h3>
+                    <Badge className={getStatusColor(deliverable.status)}>
+                      {deliverable.status}
+                    </Badge>
+                  </div>
 
-                    <Separator />
+                  <div className="space-y-2">
+                    <h3 className="font-medium">Due Date</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(deliverable.dueDate), "PPP")}
+                    </p>
+                  </div>
 
+                  {deliverable.description && (
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Notes</h3>
+                      <h3 className="font-medium">Description</h3>
                       <p className="text-sm text-muted-foreground">
-                        {deliverable.notes || "No notes provided."}
+                        {deliverable.description}
                       </p>
                     </div>
-
-                    {deliverable.fileUrl && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-medium">Attachments</h3>
-                        <a
-                          href={deliverable.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-primary hover:underline"
-                        >
-                          <FileText className="h-4 w-4" />
-                          View attached file
-                        </a>
-                      </div>
-                    )}
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Actions</h3>
-                      <div className="flex flex-col gap-2">
-                        {deliverable.status === "Delivered" && (
-                          <Button 
-                            variant="outline" 
-                            className="w-full justify-start"
-                            onClick={() => setShowFeedbackDialog(true)}
-                          >
-                            <Send className="h-4 w-4 mr-2" />
-                            Request Feedback
-                          </Button>
-                        )}
-                        
-                        {deliverable.status === "Approved" && isAdmin && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="outline" 
-                                  className="w-full justify-start"
-                                  onClick={() => setShowReopenDialog(true)}
-                                >
-                                  <Unlock className="h-4 w-4 mr-2" />
-                                  Reopen for Edit
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Only administrators can reopen approved deliverables</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </TabsContent>
 
-                <TabsContent value="feedback" className="h-full">
+                <TabsContent value="feedback" className="space-y-4">
                   <DeliverableFeedback
                     deliverable={deliverable}
                     isApproved={deliverable.status === "Approved"}
-                    onApprove={onApprove}
-                    onAddComment={onAddComment}
-                    onAddAttachment={onAddAttachment}
+                    onApprove={async () => {
+                      if (!deliverable) return;
+                      await handleUpdateStatus("Approved");
+                    }}
+                    onAddComment={async (content) => {
+                      if (!deliverable) return;
+                      // Handle adding comment
+                    }}
                   />
                 </TabsContent>
 
                 <TabsContent value="revisions" className="p-4 space-y-4">
                   {deliverable.revisions.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No revisions yet.</p>
-                    </div>
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No revisions yet
+                    </p>
                   ) : (
                     <div className="space-y-4">
-                      {deliverable.revisions.map((revision, index) => (
-                        <motion.div
-                          key={revision.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">
-                                v{deliverable.revisions.length - index}
-                              </Badge>
-                              <span className="text-sm font-medium">
-                                {format(new Date(revision.date), "MMM d, yyyy h:mm a")}
-                              </span>
-                            </div>
+                      {deliverable.revisions.map((revision) => (
+                        <div key={revision.id} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium">Version {revision.version}</span>
+                            <Badge variant="outline">{revision.status}</Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">{revision.notes}</p>
-                          {revision.fileUrl && (
-                            <a
-                              href={revision.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-primary hover:underline"
-                            >
-                              <FileText className="h-4 w-4" />
-                              View revision file
-                            </a>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {revision.changes}
+                          </p>
+                          {revision.files && revision.files.length > 0 && (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Files:</h4>
+                              <ul className="space-y-1">
+                                {revision.files.map((file, index) => (
+                                  <li key={index} className="text-sm">
+                                    <a
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      {file.name}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
-                          {index < deliverable.revisions.length - 1 && <Separator className="my-4" />}
-                        </motion.div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -245,6 +236,61 @@ export function DeliverableDrawer({
               </ScrollArea>
             </Tabs>
           </div>
+
+          {/* Share Dialog */}
+          <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Share Deliverable</DialogTitle>
+                <DialogDescription>
+                  Share this deliverable with clients or team members. They will receive a link to view the deliverable.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="share-link">Share Link</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="share-link"
+                      readOnly
+                      value={`${window.location.origin}/view/${deliverable.projectId}/${deliverable.id}`}
+                    />
+                    <Button variant="outline" onClick={handleCopyLink}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="share-email">Email (optional)</Label>
+                  <Input
+                    id="share-email"
+                    type="email"
+                    placeholder="recipient@example.com"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="share-message">Message (optional)</Label>
+                  <Textarea
+                    id="share-message"
+                    placeholder="Add a message..."
+                    value={feedbackMessage}
+                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowShareDialog(false)}>
+                  Close
+                </Button>
+                <Button onClick={handleRequestFeedback} disabled={!clientEmail}>
+                  Send Link
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Request Feedback Dialog */}
           <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>

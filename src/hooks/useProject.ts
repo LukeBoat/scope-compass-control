@@ -1,27 +1,31 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Project } from '@/types';
-import { mockProjects } from '@/data/mockData';
+import { useState, useEffect } from "react";
+import { Project } from "@/types";
+import { createProjectNotifications } from "@/services/notificationService";
+import { notificationConfig } from "@/config/notifications";
+import { mockProjects } from "@/data/mockData";
 
-export const useProject = (projectId: string) => {
+export function useProject(projectId: string) {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  const notifications = createProjectNotifications(notificationConfig);
 
   useEffect(() => {
     const fetchProject = async () => {
       try {
         setLoading(true);
-        setError(null);
+        // Find project in mock data
+        const mockProject = Object.values(mockProjects).find(p => p.id === projectId);
         
-        // Simulate API call with mock data
-        const fetchedProject = mockProjects[projectId];
-        if (!fetchedProject) {
-          throw new Error('Project not found');
+        if (!mockProject) {
+          throw new Error("Project not found");
         }
-        
-        setProject(fetchedProject);
+
+        setProject(mockProject);
+        await notifications.onProjectCreated(mockProject);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch project'));
+        setError(err instanceof Error ? err : new Error("Failed to fetch project"));
       } finally {
         setLoading(false);
       }
@@ -30,29 +34,21 @@ export const useProject = (projectId: string) => {
     fetchProject();
   }, [projectId]);
 
-  const updateProject = useCallback(async (updates: Partial<Project>) => {
+  const updateProject = async (updates: Partial<Project>) => {
+    if (!project) return;
+
     try {
-      setLoading(true);
-      setError(null);
-
-      if (!project) {
-        throw new Error('No project to update');
-      }
-
-      // In a real app, this would be an API call
-      const updatedProject = { ...project, ...updates } as Project;
-      
-      // Update mock data
-      mockProjects[projectId] = updatedProject;
-      
+      const oldStatus = project.status;
+      const updatedProject = { ...project, ...updates };
       setProject(updatedProject);
+
+      if (updates.status && updates.status !== oldStatus) {
+        await notifications.onProjectStatusChanged(updatedProject, oldStatus);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to update project'));
-      throw err;
-    } finally {
-      setLoading(false);
+      setError(err instanceof Error ? err : new Error("Failed to update project"));
     }
-  }, [project, projectId]);
+  };
 
   return { project, loading, error, updateProject };
-}; 
+} 

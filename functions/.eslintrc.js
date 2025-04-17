@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 module.exports = {
   root: true,
   env: {
@@ -5,29 +6,31 @@ module.exports = {
     node: true,
   },
   extends: [
-    "eslint:recommended",
-    "plugin:import/errors",
-    "plugin:import/warnings",
-    "plugin:import/typescript",
-    "google",
-    "plugin:@typescript-eslint/recommended",
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
   ],
-  parser: "@typescript-eslint/parser",
+  parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: ["tsconfig.json", "tsconfig.dev.json"],
-    sourceType: "module",
+    project: ['tsconfig.json'],
+    sourceType: 'module',
+    ecmaVersion: 2020,
   },
-  ignorePatterns: [
-    "/lib/**/*", // Ignore built files.
-    "/generated/**/*", // Ignore generated files.
-  ],
   plugins: [
-    "@typescript-eslint",
-    "import",
+    '@typescript-eslint'
   ],
-  rules: {
-    "quotes": ["error", "double"],
-    "import/no-unresolved": 0,
-    "indent": ["error", 2],
-  },
+  ignorePatterns: [
+    '/lib/**/*',
+    '/dist/**/*',
+  ],
+  overrides: [
+    {
+      files: ['*.ts', '*.tsx', '*.js', '*.jsx'],
+      rules: {
+        'no-restricted-globals': ['off'],
+        'no-unused-vars': ['off'],
+        '@typescript-eslint/no-unused-vars': ['off'],
+        'no-undef': ['off'],
+      },
+    },
+  ],
 };

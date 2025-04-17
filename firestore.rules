@@ -2,18 +2,148 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 5, 14);
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return request.auth.token.role == "admin";
+    }
+    
+    function isProjectMember(projectId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/projects/$(projectId)/team/$(request.auth.uid));
+    }
+    
+    function isProjectOwner(projectId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+    
+    function isProjectClient(projectId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/projects/$(projectId)).data.clientId == request.auth.uid;
+    }
+    
+    function isProjectParticipant(projectId) {
+      return isProjectMember(projectId) || isProjectOwner(projectId) || isProjectClient(projectId);
+    }
+    
+    function isDeliverableOwner(projectId, deliverableId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/projects/$(projectId)/deliverables/$(deliverableId)).data.assignedTo == request.auth.uid;
+    }
+    
+    function isFeedbackAuthor(feedbackId) {
+      return isAuthenticated() && 
+        resource.data.authorId == request.auth.uid;
+    }
+    
+    function isProjectOwnerOrEditor(projectId) {
+      return isProjectOwner(projectId) || 
+        (isAuthenticated() && request.auth.token.role == 'editor');
+    }
+    
+    function isProjectOwnerOrClient(projectId) {
+      return isProjectOwner(projectId) || isProjectClient(projectId);
+    }
+    
+    function hasProjectAccess(projectId) {
+      return request.auth.token.projectAccess[projectId] == true;
+    }
+    
+    function isValidFeedback() {
+      let validRoles = ['client', 'team'];
+      return request.resource.data.keys().hasAll(['author', 'content', 'role', 'timestamp'])
+        && request.resource.data.author is string
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.role in validRoles
+        && request.resource.data.timestamp is timestamp;
+    }
+    
+    function isValidApproval() {
+      return request.resource.data.keys().hasAll(['status', 'approvedBy', 'approvedAt', 'comment'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.approvedBy == request.auth.uid
+        && request.resource.data.approvedAt is timestamp;
+    }
+    
+    // Projects collection
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || isProjectOwner(projectId);
+      allow delete: if isAdmin();
+      
+      // Project team subcollection
+      match /team/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin() || isProjectOwner(projectId);
+      }
+      
+      // Project milestones subcollection
+      match /milestones/{milestoneId} {
+        allow read: if isAuthenticated();
+        allow create: if isAdmin() || isProjectOwner(projectId);
+        allow update: if isAdmin() || isProjectOwner(projectId);
+        allow delete: if isAdmin();
+      }
+      
+      // Project deliverables subcollection
+      match /deliverables/{deliverableId} {
+        allow read: if isAuthenticated();
+        allow create: if isAdmin() || isProjectOwner(projectId);
+        allow update: if isAuthenticated() && (isAdmin() || hasProjectAccess(projectId));
+        allow delete: if isAdmin();
+        
+        // Deliverable feedback subcollection
+        match /feedback/{feedbackId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() 
+            && isValidFeedback()
+            && (
+              isAdmin() 
+              || hasProjectAccess(projectId)
+              || (
+                request.resource.data.role == 'client' 
+                && request.auth.token.role == 'client'
+              )
+            );
+          allow update, delete: if isAuthenticated() && (isAdmin() || hasProjectAccess(projectId));
+        }
+        
+        // Deliverable approvals subcollection
+        match /approval {
+          allow read: if isAuthenticated();
+          allow create, update: if isAuthenticated() 
+            && request.auth.token.role == 'client'
+            && isValidApproval();
+          allow delete: if isAuthenticated() && isAdmin();
+        }
+      }
+      
+      // Project invoices subcollection
+      match /invoices/{invoiceId} {
+        allow read: if isAuthenticated();
+        allow create: if isAdmin() || isProjectOwner(projectId);
+        allow update: if isAdmin() || isProjectOwner(projectId);
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Activity logs collection
+    match /activityLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
   }
 }

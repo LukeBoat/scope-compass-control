@@ -64,8 +64,16 @@ export function MainLayout({ children }: MainLayoutProps) {
         />
 
         {/* Main Content */}
-        <main className="flex-1 p-4 lg:p-8">
-          {children || <Outlet />}
+        <main className={cn(
+          "flex-1 overflow-auto",
+          "p-4 lg:p-8",
+          "transition-all duration-200",
+          "lg:ml-64",
+          sidebarOpen ? "lg:ml-64" : "lg:ml-0"
+        )}>
+          <div className="mx-auto max-w-7xl">
+            {children || <Outlet />}
+          </div>
         </main>
       </div>
     </div>

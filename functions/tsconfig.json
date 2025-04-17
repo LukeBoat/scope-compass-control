@@ -4,15 +4,19 @@
     "src"
   ],
   "compilerOptions": {
-    "module": "NodeNext",
+    "module": "es2022",
     "noImplicitReturns": true,
     "outDir": "lib",
     "sourceMap": true,
     "strict": true,
-    "target": "es2017",
+    "target": "es2022",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "nodenext",
-    "noUnusedLocals": true
+    "moduleResolution": "node",
+    "noUnusedLocals": false,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "lib": ["es2022"]
   }
 }

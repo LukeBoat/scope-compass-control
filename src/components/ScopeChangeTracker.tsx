@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Plus, Clock, ArrowRight } from "lucide-react";
+import { Plus, Clock, ArrowRight, GitCompare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ScopeChange, ScopeChangeType } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ScopeChangeTrackerProps {
   projectId: string;
@@ -26,6 +27,7 @@ export function ScopeChangeTracker({ projectId, deliverables = [] }: ScopeChange
     description: "",
     deliverableId: undefined,
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   const handleCreateChange = () => {
     if (!newChange.type || !newChange.description) return;
@@ -57,6 +59,29 @@ export function ScopeChangeTracker({ projectId, deliverables = [] }: ScopeChange
         return "outline";
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (!scopeChanges || scopeChanges.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="rounded-full bg-primary/10 p-3 mb-4">
+          <GitCompare className="h-6 w-6 text-primary" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No Scope Changes Yet</h3>
+        <p className="text-muted-foreground mb-4 max-w-sm">
+          Scope changes will be tracked here when you make modifications to project deliverables, milestones, or other project elements.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

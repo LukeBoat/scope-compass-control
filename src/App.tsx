@@ -1,28 +1,45 @@
 import React, { Suspense, lazy, useCallback, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useParams, useLocation, Navigate, useNavigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProjectProvider } from '@/contexts/ProjectContext';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/Sidebar';
-import { Menu, AlertCircle } from 'lucide-react';
+import { Menu, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DevModeIndicator } from '@/components/DevModeIndicator';
+import { cn } from '@/lib/utils';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import Index from '@/pages/Index';
+import Team from '@/pages/Team';
+import Settings from '@/pages/Settings';
+import ClientLogin from '@/pages/ClientLogin';
+import ClientSignup from '@/pages/ClientSignup';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import ClientPortal from '@/pages/ClientPortal';
+import NotFound from '@/pages/NotFound';
+import { ClientModeIndicator } from "@/components/ClientModeIndicator";
+import PaymentComplete from '@/pages/PaymentComplete';
+import { ClientModeBanner } from "@/components/ClientModeBanner";
+import { PublicDeliverableView } from '@/components/PublicDeliverableView';
 
 // Lazy load components with preloading
-const Index = lazy(() => import("@/pages/Index"));
 const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
 const ProjectInvoices = lazy(() => import("@/pages/ProjectInvoices"));
-const NotFound = lazy(() => import("@/pages/NotFound"));
+const Projects = lazy(() => import("@/pages/Projects"));
 
 // Preload components in the background
 const preloadComponents = () => {
-  const components = [Index, ProjectDetail, ProjectInvoices, NotFound];
+  const components = [ProjectDetail, ProjectInvoices, Projects];
   components.forEach(component => {
     const preload = component as any;
     if (preload.preload) {
@@ -70,26 +87,28 @@ const ProjectRoutes = () => {
   
   return (
     <ErrorBoundary>
-      <ProjectProvider projectId={projectId}>
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes location={location}>
-            <Route index element={<ProjectDetail />} />
-            <Route path="invoices" element={<ProjectInvoices />} />
-            <Route path="timeline" element={<ProjectDetail />} />
-            <Route path="scope" element={<ProjectDetail />} />
-            <Route path="activity" element={<ProjectDetail />} />
-            <Route path="*" element={<Navigate to="." replace />} />
-          </Routes>
-        </Suspense>
-      </ProjectProvider>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes location={location}>
+          <Route index element={<ProjectDetail />} />
+          <Route path="invoices" element={<ProjectInvoices />} />
+          <Route path="timeline" element={<ProjectDetail />} />
+          <Route path="scope" element={<ProjectDetail />} />
+          <Route path="activity" element={<ProjectDetail />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   );
 };
 
 // Main App component with optimized state management
-const App = () => {
+const AppContent = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const { user, isLoading } = useAuth();
+
+  // Set default page title
+  usePageTitle("Dashboard");
 
   // Preload components after initial render
   useEffect(() => {
@@ -122,45 +141,79 @@ const App = () => {
     setIsSidebarOpen(prev => !prev);
   }, []);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <TooltipProvider>
-            <Router>
-              <div className="flex h-screen bg-background">
+            <Toaster />
+            <Sonner />
+            <div className="min-h-screen bg-background">
+              <div className="flex h-screen overflow-hidden">
                 <Sidebar isOpen={isSidebarOpen} onClose={handleSidebarToggle} />
-                
-                {/* Mobile menu toggle button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="fixed top-4 left-4 z-50 lg:hidden"
-                  onClick={handleSidebarToggle}
-                  aria-label="Toggle menu"
-                >
-                  <Menu className="h-6 w-6" />
-                </Button>
-                
-                {/* Main content with padding for mobile menu button */}
-                <main className={`flex-1 overflow-auto transition-all duration-300 ${isSidebarOpen ? 'lg:ml-64' : ''} pt-16 lg:pt-0`}>
-                  <Suspense fallback={<LoadingFallback />}>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <ClientModeBanner />
+                  <main className="flex-1 overflow-y-auto">
                     <Routes>
                       <Route path="/" element={<Index />} />
-                      <Route path="/projects/:projectId/*" element={<ProjectRoutes />} />
+                      <Route path="/login" element={<ClientLogin />} />
+                      <Route path="/signup" element={<ClientSignup />} />
+                      <Route path="/client-portal" element={
+                        <ProtectedRoute>
+                          <ClientPortal />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/projects" element={
+                        <ProtectedRoute>
+                          <Projects />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/projects/:projectId/*" element={
+                        <ProtectedRoute>
+                          <ProjectRoutes />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/team" element={
+                        <ProtectedRoute>
+                          <Team />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/settings" element={
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/payment-complete" element={<PaymentComplete />} />
+                      <Route path="/view/:projectId/:deliverableId" element={<PublicDeliverableView />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-                  </Suspense>
-                </main>
+                  </main>
+                </div>
               </div>
-              <Toaster />
-              <Sonner />
-              <DevModeIndicator />
-            </Router>
+            </div>
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
+  );
+};
+
+// Root App component with providers
+const App = () => {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 };
 

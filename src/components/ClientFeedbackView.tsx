@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Deliverable, DeliverableFeedback } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ClientFeedbackViewProps {
   deliverable: Deliverable;
@@ -40,6 +41,7 @@ export function ClientFeedbackView({
   const [approvalComment, setApprovalComment] = useState("");
   const [changesComment, setChangesComment] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { toast } = useToast();
 
   // Load existing feedback
   useEffect(() => {
@@ -69,8 +71,18 @@ export function ClientFeedbackView({
       await onAddComment(deliverable.id, comment);
       setNewComment("");
       setSelectedFile(null);
+      
+      toast({
+        title: "Feedback Added",
+        description: "Your feedback has been added to the deliverable.",
+      });
     } catch (error) {
       console.error("Failed to add comment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit feedback. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -87,12 +99,22 @@ export function ClientFeedbackView({
     onApprove(deliverable.id, approvalComment.trim() || undefined);
     setShowApprovalDialog(false);
     setApprovalComment("");
+    
+    toast({
+      title: "Deliverable Approved",
+      description: "The deliverable has been marked as approved.",
+    });
   };
 
   const handleRequestChanges = () => {
     onRequestChanges(deliverable.id, changesComment.trim());
     setShowChangesDialog(false);
     setChangesComment("");
+    
+    toast({
+      title: "Changes Requested",
+      description: "Your change request has been submitted.",
+    });
   };
 
   const getStatusColor = (status: string) => {

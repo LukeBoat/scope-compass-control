@@ -3,7 +3,12 @@ import { ProjectInfo } from "@/components/ProjectInfo";
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
+import { NavigationBreadcrumb } from "./NavigationBreadcrumb";
+import { ProjectLoading } from "@/components/ProjectLoading";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 interface ProjectViewProps {
   projectId: string;
@@ -11,41 +16,32 @@ interface ProjectViewProps {
 
 export function ProjectView({ projectId }: ProjectViewProps) {
   const { project, loading, error } = useProject(projectId);
+  const navigate = useNavigate();
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-12 w-[250px]" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-[200px]" />
-          <Skeleton className="h-4 w-[150px]" />
-        </div>
-        <Skeleton className="h-[200px] w-full" />
+        <NavigationBreadcrumb />
+        <ProjectLoading />
       </div>
     );
   }
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-          {error.message || "Failed to load project details"}
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-4">
+        <NavigationBreadcrumb />
+        <div className="text-destructive">{error}</div>
+      </div>
     );
   }
 
   if (!project) {
     return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Not Found</AlertTitle>
-        <AlertDescription>
-          Project not found or you don't have access to it.
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-4">
+        <NavigationBreadcrumb />
+        <div>Project not found</div>
+      </div>
     );
   }
 
@@ -56,13 +52,27 @@ export function ProjectView({ projectId }: ProjectViewProps) {
   })) || [];
 
   return (
-    <div className="space-y-6">
-      <ProjectInfo projectId={projectId} />
-      <ProjectTabs 
-        projectId={projectId}
-        project={project}
-        deliverables={deliverables}
-      />
+    <div className="space-y-4">
+      <NavigationBreadcrumb />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/projects")}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Projects</span>
+          </Button>
+          <h1 className="text-2xl font-bold">{project.name}</h1>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+            {project.status}
+          </Badge>
+        </div>
+      </div>
+      <ProjectTabs project={project} />
     </div>
   );
 } 

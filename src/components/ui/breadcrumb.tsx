@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
-import { ChevronRight, MoreHorizontal } from "lucide-react"
+import { ChevronRight, MoreHorizontal, Home } from "lucide-react"
+import { Link, useLocation } from "react-router-dom"
 
 import { cn } from "@/lib/utils"
 
@@ -103,6 +104,55 @@ const BreadcrumbEllipsis = ({
   </span>
 )
 BreadcrumbEllipsis.displayName = "BreadcrumbElipssis"
+
+interface BreadcrumbProps {
+  className?: string;
+}
+
+export function Breadcrumb({ className }: BreadcrumbProps) {
+  const location = useLocation();
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+
+  // Create breadcrumb items
+  const breadcrumbItems = pathSegments.map((segment, index) => {
+    const path = `/${pathSegments.slice(0, index + 1).join('/')}`;
+    const isLast = index === pathSegments.length - 1;
+    const label = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+
+    return {
+      path,
+      label,
+      isLast
+    };
+  });
+
+  return (
+    <nav className={cn("flex items-center space-x-1 text-sm text-muted-foreground", className)}>
+      <Link 
+        to="/" 
+        className="flex items-center hover:text-foreground transition-colors"
+      >
+        <Home className="h-4 w-4" />
+      </Link>
+      
+      {breadcrumbItems.map((item, index) => (
+        <div key={item.path} className="flex items-center">
+          <ChevronRight className="h-4 w-4 mx-1" />
+          {item.isLast ? (
+            <span className="font-medium text-foreground">{item.label}</span>
+          ) : (
+            <Link 
+              to={item.path}
+              className="hover:text-foreground transition-colors"
+            >
+              {item.label}
+            </Link>
+          )}
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 export {
   Breadcrumb,

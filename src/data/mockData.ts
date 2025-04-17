@@ -10,13 +10,15 @@ export const mockProjects: Record<string, Project> = {
     endDate: "2024-06-30",
     budget: 50000,
     client: "Acme Corp",
-    clientName: "Acme Corp",
-    team: ["user-1", "user-2"],
+    teamMembers: [
+      { id: "user-1", name: "John Doe", email: "john@example.com", role: "owner", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John", status: "active" },
+      { id: "user-2", name: "Jane Smith", email: "jane@example.com", role: "editor", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane", status: "active" }
+    ],
     milestones: [],
     deliverables: [],
-    notes: "Priority project for Q1",
-    revisionLimit: 3,
-    revisionsUsed: 0
+    invoices: [],
+    createdAt: new Date("2024-01-01").toISOString(),
+    updatedAt: new Date("2024-01-01").toISOString()
   },
   "project-2": {
     id: "project-2",
@@ -27,13 +29,15 @@ export const mockProjects: Record<string, Project> = {
     endDate: "2024-08-31",
     budget: 75000,
     client: "TechStart Inc",
-    clientName: "TechStart Inc",
-    team: ["user-1", "user-3"],
+    teamMembers: [
+      { id: "user-1", name: "John Doe", email: "john@example.com", role: "owner", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John", status: "active" },
+      { id: "user-3", name: "Bob Wilson", email: "bob@example.com", role: "editor", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob", status: "active" }
+    ],
     milestones: [],
     deliverables: [],
-    notes: "Using React Native framework",
-    revisionLimit: 5,
-    revisionsUsed: 1
+    invoices: [],
+    createdAt: new Date("2024-02-01").toISOString(),
+    updatedAt: new Date("2024-02-01").toISOString()
   },
   "project-3": {
     id: "project-3",
@@ -44,13 +48,15 @@ export const mockProjects: Record<string, Project> = {
     endDate: "2024-01-31",
     budget: 100000,
     client: "Retail Co",
-    clientName: "Retail Co",
-    team: ["user-2", "user-3"],
+    teamMembers: [
+      { id: "user-2", name: "Jane Smith", email: "jane@example.com", role: "owner", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane", status: "active" },
+      { id: "user-3", name: "Bob Wilson", email: "bob@example.com", role: "editor", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob", status: "active" }
+    ],
     milestones: [],
     deliverables: [],
-    notes: "Successfully launched in Q4",
-    revisionLimit: 4,
-    revisionsUsed: 2
+    invoices: [],
+    createdAt: new Date("2023-09-01").toISOString(),
+    updatedAt: new Date("2024-01-31").toISOString()
   },
   "project-4": {
     id: "project-4",
@@ -61,12 +67,15 @@ export const mockProjects: Record<string, Project> = {
     endDate: "2024-09-30",
     budget: 60000,
     client: "Media Group",
-    clientName: "Media Group",
-    team: ["user-1", "user-2", "user-3"],
+    teamMembers: [
+      { id: "user-1", name: "John Doe", email: "john@example.com", role: "owner", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John", status: "active" },
+      { id: "user-2", name: "Jane Smith", email: "jane@example.com", role: "editor", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane", status: "active" },
+      { id: "user-3", name: "Bob Wilson", email: "bob@example.com", role: "viewer", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob", status: "active" }
+    ],
     milestones: [],
     deliverables: [],
-    notes: "Awaiting client content migration",
-    revisionLimit: 3,
-    revisionsUsed: 0
+    invoices: [],
+    createdAt: new Date("2024-03-01").toISOString(),
+    updatedAt: new Date("2024-03-01").toISOString()
   }
 };
